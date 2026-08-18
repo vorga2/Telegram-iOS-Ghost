@@ -14,7 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Verify pinned Telegram patch
-        run: python3 ci_verify_v03.py
+        run: |
+          python3 ci_verify_v03.py
+          python3 ci_verify_hotfixes.py
 
   build_ipa:
     needs: verify
