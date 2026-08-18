@@ -93,6 +93,12 @@ def patch_consume(path: Path) -> None:
 
 def patch_open_view_once_ui(path: Path) -> None:
     text = path.read_text()
+    text = replace_once(
+        text,
+        "        let isIncoming = message.effectivelyIncoming(self.context.account.peerId)\n        \n",
+        "",
+        "view-once-unused-incoming",
+    )
     old = """                    closeActionTitle: isIncoming ? self.presentationData.strings.Chat_PlayOnceMesasgeCloseAndDelete : self.presentationData.strings.Chat_PlayOnceMesasgeClose,\n"""
     new = """                    // AYU_IOS_PATCH_v0_3: incoming view-once media is preserved,\n                    // so closing the viewer must not claim it will be deleted.\n                    closeActionTitle: self.presentationData.strings.Chat_PlayOnceMesasgeClose,\n"""
     text = replace_once(text, old, new, "view-once-close-title")
