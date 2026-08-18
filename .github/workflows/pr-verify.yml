@@ -134,6 +134,12 @@ jobs:
       - name: Apply Spy message Details
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_spy_details.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Persist Spy content-read dates
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_spy_content_read_dates.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Finish deleted-message customization
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_customization_finish.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Create build configuration
         shell: bash
         run: |
