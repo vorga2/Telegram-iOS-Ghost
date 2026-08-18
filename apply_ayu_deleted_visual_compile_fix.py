@@ -15,16 +15,21 @@ def main() -> int:
     text = path.read_text(encoding="utf-8")
 
     if MARK in text:
+        # The marker itself intentionally does not contain the removed Swift
+        # identifier, because the verifier asserts that identifier is absent
+        # from the final generated source.
+        if "let ayuUsesTelegramTheme" in text or "ayuUsesTelegramTheme =" in text:
+            raise RuntimeError("deleted visual compile fix: stale Telegram-theme flag code remains")
         print(f"[ayu-deleted-visual-compile-fix] already patched: {path}")
         return 0
 
     old_decl = "        let ayuDeletedBackgroundColor: UIColor?\n        let ayuUsesTelegramTheme: Bool\n"
     if old_decl not in text:
-        raise RuntimeError("deleted visual compile fix: ayuUsesTelegramTheme declaration not found")
+        raise RuntimeError("deleted visual compile fix: dead Telegram-theme declaration not found")
 
     text = text.replace(
         old_decl,
-        "        // AYU_DELETED_VISUAL_COMPILE_FIX_v0_3: removed dead ayuUsesTelegramTheme flag\n        let ayuDeletedBackgroundColor: UIColor?\n",
+        "        // AYU_DELETED_VISUAL_COMPILE_FIX_v0_3: removed dead Telegram-theme flag\n        let ayuDeletedBackgroundColor: UIColor?\n",
         1,
     )
 
@@ -39,8 +44,8 @@ def main() -> int:
     ):
         text = text.replace(line, "")
 
-    if "let ayuUsesTelegramTheme" in text or "ayuUsesTelegramTheme =" in text:
-        raise RuntimeError("deleted visual compile fix: stale ayuUsesTelegramTheme code remains")
+    if "ayuUsesTelegramTheme" in text:
+        raise RuntimeError("deleted visual compile fix: removed identifier still present")
 
     path.write_text(text, encoding="utf-8")
     print("[ayu-deleted-visual-compile-fix] removed dead Telegram-theme flag")
