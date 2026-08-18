@@ -78,6 +78,9 @@ jobs:
       - name: Apply Ayu view-once preservation
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_view_once.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Apply durable view-once persistence
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_view_once_durable.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Apply view-once burn action
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_view_once_burn.py" "$RUNNER_TEMP/Telegram-iOS"
 
