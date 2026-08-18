@@ -102,6 +102,9 @@ jobs:
       - name: Apply behavior hotfixes
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_behavior_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Archive deleted metadata and attachments
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_archive.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Restore deleted marker and Telegram-theme background default
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_visual_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
 
