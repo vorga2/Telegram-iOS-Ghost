@@ -151,10 +151,10 @@ def main() -> None:
     profile = (peer_info_root / "PeerInfoProfileItems.swift").read_text(encoding="utf-8")
     for needle in (
         "AYU_IOS_PROFILE_CACHE_v0_3",
-        "let ayuCurrentPhone",
-        "let ayuCurrentUsername",
-        "let ayuDisplayPhone = ayuCurrentPhone ?? ayuCachedProfile.phone",
-        "let ayuDisplayUsername = ayuCurrentUsername ?? ayuCachedProfile.username",
+        "let ayuServerPhone",
+        "let ayuServerUsername",
+        "let ayuDisplayPhone = ayuServerPhone ?? ayuCachedProfile.phone",
+        "let ayuDisplayUsername = ayuServerUsername ?? ayuCachedProfile.username",
         "if let phone = ayuDisplayPhone {",
         "if let mainUsername = ayuDisplayUsername {",
         "ayuCachedProfile.note",
