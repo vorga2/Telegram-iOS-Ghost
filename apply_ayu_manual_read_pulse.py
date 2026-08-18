@@ -33,27 +33,32 @@ def main() -> None:
             die(f"missing file: {path}")
 
     enqueue_text = enqueue.read_text(encoding="utf-8")
-    enqueue_text = replace_once(
-        enqueue_text,
-        "private func ayuSendOnlinePulse(account: Account) {",
-        "// AYU_MANUAL_READ_PULSE_v0_3\npublic func ayuGhostOnlinePulse(account: Account) {",
-        "pulse helper visibility",
-    )
-    enqueue_text = replace_once(
-        enqueue_text,
-        "    ayuSendOnlinePulse(account: account)\n",
-        "    ayuGhostOnlinePulse(account: account)\n",
-        "send pulse call",
-    )
-    enqueue.write_text(enqueue_text, encoding="utf-8")
-
     menu_text = context_menu.read_text(encoding="utf-8")
-    old = """                AyuRuntimeSettings.allowNextRead(peerId: ayuMessage.id.peerId)\n                let _ = context.engine.messages.applyMaxReadIndexInteractively(index: ayuMessage.index).startStandalone()\n"""
-    new = """                // AYU_MANUAL_READ_PULSE_v0_3: explicit Read briefly exposes\n                // online status using the same one-shot 200 ms path as sending,\n                // then Ghost returns offline without changing its settings.\n                AyuRuntimeSettings.allowNextRead(peerId: ayuMessage.id.peerId)\n                ayuGhostOnlinePulse(account: context.account)\n                let _ = context.engine.messages.applyMaxReadIndexInteractively(index: ayuMessage.index).startStandalone()\n"""
-    menu_text = replace_once(menu_text, old, new, "manual Read action")
-    context_menu.write_text(menu_text, encoding="utf-8")
 
-    print("[ayu-manual-read-pulse] patched send + manual Read pulse")
+    # apply_ayu_send_read.py now performs this patch in the normal CI path.
+    # Keep this standalone patcher idempotent for verifier/local use.
+    if "public func ayuGhostOnlinePulse(account: Account)" not in enqueue_text:
+        enqueue_text = replace_once(
+            enqueue_text,
+            "private func ayuSendOnlinePulse(account: Account) {",
+            "public func ayuGhostOnlinePulse(account: Account) {",
+            "pulse helper visibility",
+        )
+        enqueue_text = replace_once(
+            enqueue_text,
+            "    ayuSendOnlinePulse(account: account)\n",
+            "    ayuGhostOnlinePulse(account: account)\n",
+            "send pulse call",
+        )
+        enqueue.write_text(enqueue_text, encoding="utf-8")
+
+    if MARK not in menu_text:
+        old = """                AyuRuntimeSettings.allowNextRead(peerId: ayuMessage.id.peerId)\n                let _ = context.engine.messages.applyMaxReadIndexInteractively(index: ayuMessage.index).startStandalone()\n"""
+        new = """                // AYU_MANUAL_READ_PULSE_v0_3: explicit Read briefly uses\n                // the same 200 ms online pulse as sending, then Ghost returns offline.\n                AyuRuntimeSettings.allowNextRead(peerId: ayuMessage.id.peerId)\n                ayuGhostOnlinePulse(account: context.account)\n                let _ = context.engine.messages.applyMaxReadIndexInteractively(index: ayuMessage.index).startStandalone()\n"""
+        menu_text = replace_once(menu_text, old, new, "manual Read action")
+        context_menu.write_text(menu_text, encoding="utf-8")
+
+    print("[ayu-manual-read-pulse] ready")
 
 
 if __name__ == "__main__":
