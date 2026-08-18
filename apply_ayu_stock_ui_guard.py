@@ -40,7 +40,16 @@ def main() -> int:
         ]),
     )
 
-    print("[ayu-stock-ui] outgoing timestamps/date/status path is stock Telegram")
+    # Whole-item alpha was the wrong place for deleted styling: it fades every
+    # child of the message node (reply block, author name, time/status, media,
+    # pinned presentation, etc.). Deleted styling is now moved to the bubble
+    # background only, so keep the stock Telegram item renderer untouched.
+    restore_stock(
+        root / "submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageItemImpl.swift",
+        f"// {MARK}: stock message-item renderer preserved; no whole-item deleted alpha.",
+    )
+
+    print("[ayu-stock-ui] message item + outgoing timestamps/date/status paths are stock Telegram")
     return 0
 
 
