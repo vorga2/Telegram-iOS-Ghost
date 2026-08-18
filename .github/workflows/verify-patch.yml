@@ -64,12 +64,15 @@ jobs:
             exit 1
           fi
 
-          gh issue comment 1 --repo "$GITHUB_REPOSITORY" --body "## ✅ Verify success
+          cat > /tmp/ayu-success.md <<EOF
+          ## ✅ Verify success
 
-source: \`$GITHUB_SHA\`
-run: \`$GITHUB_RUN_ID\`
+          source: \`$GITHUB_SHA\`
+          run: \`$GITHUB_RUN_ID\`
 
-Dispatching **Build Telegram Ayu IPA v0.3.0** now."
+          Dispatching **Build Telegram Ayu IPA v0.3.0** now.
+          EOF
+          gh issue comment 1 --repo "$GITHUB_REPOSITORY" --body-file /tmp/ayu-success.md
 
           gh workflow run build-ipa.yml --repo "$GITHUB_REPOSITORY" --ref main
 
@@ -92,12 +95,15 @@ Dispatching **Build Telegram Ayu IPA v0.3.0** now."
           build_sha="$(printf '%s' "$build_json" | jq -r '.[0].headSha')"
           build_url="$(printf '%s' "$build_json" | jq -r '.[0].url')"
 
-          gh issue comment 1 --repo "$GITHUB_REPOSITORY" --body "## 🚀 IPA build started
+          cat > /tmp/ayu-build-started.md <<EOF
+          ## 🚀 IPA build started
 
-run_id: \`$build_id\`
-status: \`$build_status\`
-head: \`$build_sha\`
-$build_url"
+          run_id: \`$build_id\`
+          status: \`$build_status\`
+          head: \`$build_sha\`
+          $build_url
+          EOF
+          gh issue comment 1 --repo "$GITHUB_REPOSITORY" --body-file /tmp/ayu-build-started.md
 
           git fetch origin main
           git reset --hard origin/main
