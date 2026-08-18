@@ -35,6 +35,7 @@ def main() -> None:
         "apply_ayu_spy_settings.py",
         "apply_ayu_spy_edit_history.py",
         "apply_ayu_spy_read_dates.py",
+        "apply_ayu_spy_details.py",
     )
     for name in patchers:
         py_compile.compile(str(workspace / name), doraise=True)
@@ -51,6 +52,10 @@ def main() -> None:
     require("ayuReadMessageThroughGhost(account: context.account" in menu, "manual Read action does not use direct helper")
     require("ayuBurnViewOnceRemotely(account: context.account" in menu, "Burn is not remote-only")
     require("ayuGhostOnlinePulse(account: context.account)" in menu, "Read/Burn online pulse missing")
+    require("AYU_SPY_DETAILS_v0_3" in menu, "Spy Details context menu missing")
+    require('text: "Детали"' in menu, "Details action missing")
+    require('text: "Назад"' in menu and "controller?.popItems()" in menu, "nested Details Back action missing")
+    require("controller.pushItems" in menu, "Details must use nested context menu")
 
     consume = (telegram / "submodules/TelegramCore/Sources/TelegramEngine/Messages/MarkMessageContentAsConsumedInteractively.swift").read_text(encoding="utf-8")
     require("public func ayuBurnViewOnceRemotely" in consume, "remote Burn helper missing")
@@ -61,6 +66,8 @@ def main() -> None:
     require("LocalMessageTags(rawValue: 1 << 30)" in manager, "real-time deleted invalidation tag missing")
     require("AYU_DELETED_ARCHIVE_v0_3" in manager, "deleted archive hook missing")
     require("AYU_SPY_EDIT_HISTORY_v0_3" in manager, "Spy edit-history hook missing")
+    require("AYU_SPY_DETAILS_v0_3" in manager, "Spy stored Details helper missing")
+    require("ayuSpyStoredMessageDetails" in manager, "Spy DB Details lookup missing")
     require("CREATE TABLE IF NOT EXISTS edit_history" in manager, "Spy edit-history table missing")
     require("edit_history_message_idx" in manager, "Spy edit-history index missing")
     require("AyuRuntimeSettings.snapshot.saveEditHistory" in manager, "Spy edit-history toggle not enforced")
@@ -84,6 +91,10 @@ def main() -> None:
     require("case let .updateReadHistoryOutbox" in state_utils, "outgoing read update hook missing")
     require("peerId.namespace != Namespaces.Peer.CloudChannel" in state_utils, "channels are not excluded from local read dates")
     require("INSERT OR IGNORE INTO read_receipts" in state_utils, "local read max-boundary persistence missing")
+    require('appendingPathComponent("AyuGram"' not in state_utils, "read-date DB must use exposed Documents root")
+
+    database = (telegram / "submodules/Postbox/Sources/Database.swift").read_text(encoding="utf-8")
+    require("AYU_SPY_QUERY_ROWS_v0_3" in database and "public func queryRows" in database, "Ayu SQLite query helper missing")
 
     plist = (telegram / "Telegram/Telegram-iOS/InfoBazel.plist").read_text(encoding="utf-8")
     require("<string>AyuGram</string>" in plist, "AyuGram Files folder/display name missing")
