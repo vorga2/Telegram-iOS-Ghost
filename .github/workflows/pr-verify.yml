@@ -78,6 +78,9 @@ jobs:
       - name: Apply Ayu view-once preservation
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_view_once.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Restore stock Telegram date and status UI
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_stock_ui_guard.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Create build configuration
         shell: bash
         run: |
