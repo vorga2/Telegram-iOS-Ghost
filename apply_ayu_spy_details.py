@@ -71,12 +71,17 @@ public func ayuSpyStoredMessageDetails(_ messageId: MessageId) -> AyuSpyStoredMe
 
     let peerId = messageId.peerId.toInt64()
     let deletedRows = database.queryRows("SELECT deleted_at FROM deleted_messages WHERE peer_id = \(peerId) AND message_namespace = \(messageId.namespace) AND message_id = \(messageId.id) LIMIT 1")
-    let deletedAt = deletedRows.first?.first.flatMap { $0 }.flatMap(Int64.init)
+    var deletedAt: Int64?
+    if let row = deletedRows.first, let value = row.first ?? nil {
+        deletedAt = Int64(value)
+    }
 
     var localReadAt: Int64?
     if AyuRuntimeSettings.snapshot.saveReadDates && messageId.peerId.namespace != Namespaces.Peer.CloudChannel {
         let readRows = database.queryRows("SELECT read_at FROM read_receipts WHERE peer_id = \(peerId) AND max_message_id >= \(messageId.id) ORDER BY read_at ASC LIMIT 1")
-        localReadAt = readRows.first?.first.flatMap { $0 }.flatMap(Int64.init)
+        if let row = readRows.first, let value = row.first ?? nil {
+            localReadAt = Int64(value)
+        }
     }
 
     return AyuSpyStoredMessageDetails(deletedAt: deletedAt, localReadAt: localReadAt)
@@ -120,10 +125,11 @@ private func ayuDetailsSize(_ bytes: Int64) -> String {
 }
 
 private func ayuDetailsRow(_ text: String) -> ContextMenuItem {
-    return .action(ContextMenuActionItem(text: text, textLayout: .multiline, icon: { _ in nil }, action: nil))
+    let emptyAction: ((ContextMenuActionItem.Action) -> Void)? = nil
+    return .action(ContextMenuActionItem(text: text, textLayout: .multiline, textFont: .small, icon: { _ in nil }, action: emptyAction))
 }
 
-private func ayuDetailsMenuItems(message: EngineRawMessage, stored: AyuSpyStoredMessageDetails, readStats: MessageReadStats?, accountPeerId: PeerId) -> [ContextMenuItem] {
+private func ayuDetailsMenuItems(message: EngineRawMessage, stored: AyuSpyStoredMessageDetails, readStats: MessageReadStats?) -> [ContextMenuItem] {
     var items: [ContextMenuItem] = []
     items.append(.action(ContextMenuActionItem(text: "Назад", icon: { _ in nil }, action: { controller, _ in
         controller?.popItems()
@@ -188,9 +194,6 @@ private func ayuDetailsMenuItems(message: EngineRawMessage, stored: AyuSpyStored
 
             if (file.isVoice || file.isInstantVideo), let effectiveReadAt {
                 items.append(ayuDetailsRow("Дата прочтения содержимого: \(ayuDetailsDate(effectiveReadAt))"))
-            } else if file.isCustomEmoji {
-                // Telegram custom emoji/sticker media already exposes its actual
-                // MIME above (commonly application/x-tgsticker).
             }
         }
     }
@@ -224,7 +227,7 @@ private func ayuDetailsMenuItems(message: EngineRawMessage, stored: AyuSpyStored
                     return
                 }
                 let stored = ayuSpyStoredMessageDetails(ayuDetailsMessage.id)
-                let detailItems = ayuDetailsMenuItems(message: ayuDetailsMessage, stored: stored, readStats: readStats, accountPeerId: context.account.peerId)
+                let detailItems = ayuDetailsMenuItems(message: ayuDetailsMessage, stored: stored, readStats: readStats)
                 controller.pushItems(items: .single(ContextController.Items(content: .list(detailItems))))
             })))
         }
