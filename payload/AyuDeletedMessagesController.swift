@@ -4,6 +4,7 @@ import Display
 import SwiftSignalKit
 import TelegramCore
 import AccountContext
+import Postbox
 
 /// Read-only chat-like history that reuses Telegram's stock message renderer.
 /// Deleted messages remain real Postbox messages, so replies/media/bubbles keep
@@ -53,14 +54,14 @@ final class AyuDeletedMessagesChatContents: ChatCustomContentsProtocol {
             }
 
             self.disposable = (self.context.engine.data.get(
-                EngineDataMap(ids.map(TelegramEngine.EngineData.Item.Messages.Message.init))
+                EngineDataList(ids.map(TelegramEngine.EngineData.Item.Messages.Message.init(id:)))
             )
             |> deliverOn(self.queue)).start(next: { [weak self] result in
                 guard let self else {
                     return
                 }
 
-                let messages = result.values.compactMap { $0 }.sorted(by: { lhs, rhs in
+                let messages = result.compactMap { $0 }.sorted(by: { lhs, rhs in
                     return lhs.index < rhs.index
                 })
                 let entries = messages.map { message in
