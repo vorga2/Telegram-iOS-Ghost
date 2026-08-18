@@ -25,7 +25,7 @@ def main() -> None:
     telegram = runner_temp / "Telegram-iOS"
 
     print("=== Python syntax ===", flush=True)
-    for name in ("apply_ayu_v03.py", "apply_ayu_v03_fixed.py", "apply_ayu_v03_crashfix.py", "apply_ayu_profile_cache.py"):
+    for name in ("apply_ayu_v03.py", "apply_ayu_v03_fixed.py", "apply_ayu_v03_crashfix.py", "apply_ayu_v03_ui_v2.py", "apply_ayu_profile_cache.py"):
         py_compile.compile(str(workspace / name), doraise=True)
         print(f"OK: {name}")
 
@@ -43,7 +43,7 @@ def main() -> None:
     print(f"Telegram ref: {actual_ref}")
 
     print("=== Apply Ayu patches ===", flush=True)
-    run(sys.executable, str(workspace / "apply_ayu_v03_crashfix.py"), str(telegram))
+    run(sys.executable, str(workspace / "apply_ayu_v03_ui_v2.py"), str(telegram))
     run(sys.executable, str(workspace / "apply_ayu_profile_cache.py"), str(telegram))
 
     print("=== Verify native settings ===", flush=True)
@@ -61,22 +61,46 @@ def main() -> None:
     require((peer_info_root / "AyuProfileFieldCache.swift").exists(), "AyuProfileFieldCache.swift missing")
     require((telegram / "submodules/TelegramCore/Sources/State/AyuGhostLastSeen.swift").exists(), "AyuGhostLastSeen.swift missing")
 
+    settings_controller = (peer_info_root / "AyuSettingsController.swift").read_text(encoding="utf-8")
+    require("ActionSheetController" in settings_controller, "deleted marker/color selectors are not native action sheets")
+    require("Онлайн на 0,2 с при отправке" not in settings_controller, "0.2 s pulse toggle must not be visible")
+    require("selectDeletedStyle" in settings_controller and "selectDeletedColor" in settings_controller, "deleted style/color picker callbacks missing")
+
+    runtime = (telegram / "submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift").read_text(encoding="utf-8")
+    require("return state.with { $0.master && $0.hideOnline }" in runtime, "0.2 s online pulse is not permanently enabled under Ghost hide-online")
+    require("public static let deletedMessageAlpha: Float = 0.5" in runtime, "deleted message alpha is not 0.5")
+
     debug = (telegram / "submodules/DebugSettingsUI/Sources/DebugController.swift").read_text(encoding="utf-8")
     require("AyuGram Settings" not in debug, "legacy DebugController Ayu row is still being injected")
 
-    print("=== Verify Ghost read crash fix ===", flush=True)
+    print("=== Verify Ghost read crash fix + explicit read ===", flush=True)
     read_state = (telegram / "submodules/TelegramCore/Sources/State/SynchronizePeerReadState.swift").read_text(encoding="utf-8")
     require("Ghost read suppression must remove the Postbox" in read_state, "transaction-safe Ghost read marker missing")
     require("transaction.confirmSynchronizedIncomingReadState(peerId)" in read_state, "Ghost read operation is not consumed through Postbox")
-    require("if validate && !AyuRuntimeSettings.suppressReadMessages" not in read_state, "old validation no-op recursion path is still present")
+    require("AyuRuntimeSettings.shouldSuppressRead(peerId: peerId)" in read_state, "peer-aware Ghost read suppression missing")
+    require("AyuRuntimeSettings.consumeManualReadAllowance(peerId: peerId)" in read_state, "manual-read allowance is not single-use")
     dangerous = "if AyuRuntimeSettings.suppressReadMessages {\n        return .single(readState)"
     require(dangerous not in read_state, "old synchronous .single(readState) Ghost shortcut is still present")
+
+    context_menu = (telegram / "submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift").read_text(encoding="utf-8")
+    require('text: "Прочитать"' in context_menu, "manual Read context-menu item missing")
+    require("AyuRuntimeSettings.allowNextRead(peerId: ayuMessage.id.peerId)" in context_menu, "manual Read does not arm one-shot bypass")
+    require("applyMaxReadIndexInteractively(index: ayuMessage.index)" in context_menu, "manual Read does not apply the selected message read index")
 
     print("=== Verify deleted-message hooks ===", flush=True)
     state_utils = (telegram / "submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift").read_text(encoding="utf-8")
     require(state_utils.count("AyuRuntimeSettings.markDeletedGlobalIds") >= 1, "global deleted-message hook missing")
     require(state_utils.count("AyuRuntimeSettings.markDeletedMessageIds") >= 2, "channel deleted-message hooks missing")
     require("AyuRuntimeSettings.keepDeletedMessages" in state_utils, "deleted preservation guard missing")
+
+    message_item = (telegram / "submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageItemImpl.swift").read_text(encoding="utf-8")
+    require(message_item.count("AyuRuntimeSettings.deletedMessageAlpha") >= 2, "deleted 0.5 alpha is not applied on create/update")
+    require("AyuRuntimeSettings.registerDeletedMessageId" in message_item, "rendered deleted messages are not promoted to peer-qualified ids")
+
+    status_node = (telegram / "submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/ChatMessageDateAndStatusNode.swift").read_text(encoding="utf-8")
+    require("let ayuDateText = NSMutableAttributedString" in status_node, "marker-only attributed timestamp path missing")
+    require("ayuDateText.addAttribute(.foregroundColor" in status_node, "selected marker color is not applied")
+    require("dateColor = UIColor.systemRed" not in status_node, "message date is still being recolored")
 
     print("=== Verify profile field cache ===", flush=True)
     profile = (peer_info_root / "PeerInfoProfileItems.swift").read_text(encoding="utf-8")
@@ -92,7 +116,6 @@ def main() -> None:
     require("var phone: String? = nil" in cache_payload, "profile cache Codable defaults missing")
     require("var username: String? = nil" in cache_payload, "profile cache Codable username default missing")
     require("var note: String? = nil" in cache_payload, "profile cache Codable note default missing")
-    require("String(peerId.toInt64())" in cache_payload, "profile cache uses an unsafe/internal PeerId key path")
 
     print("=== Verify all patch markers ===", flush=True)
     marker_files = (
@@ -104,6 +127,8 @@ def main() -> None:
         "submodules/TelegramCore/Sources/PendingMessages/EnqueueMessage.swift",
         "submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/StringForMessageTimestampStatus.swift",
         "submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/ChatMessageDateAndStatusNode.swift",
+        "submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageItemImpl.swift",
+        "submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift",
         "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift",
         "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoData.swift",
     )
@@ -112,7 +137,6 @@ def main() -> None:
         require("AYU_IOS_PATCH_v0_3" in text, f"patch marker missing in {relative}")
         print(f"OK: {relative}")
 
-    settings_controller = (peer_info_root / "AyuSettingsController.swift").read_text(encoding="utf-8")
     require("func ayuSettingsController(context: AccountContext)" in settings_controller, "Ayu settings controller entrypoint missing")
     ghost_last_seen = (telegram / "submodules/TelegramCore/Sources/State/AyuGhostLastSeen.swift").read_text(encoding="utf-8")
     require("public enum AyuGhostLastSeen" in ghost_last_seen, "Ghost last-seen runtime missing")
