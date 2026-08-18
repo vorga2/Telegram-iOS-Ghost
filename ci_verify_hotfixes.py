@@ -27,6 +27,7 @@ def main() -> None:
     patchers = (
         "apply_ayu_behavior_hotfix.py",
         "apply_ayu_deleted_archive.py",
+        "apply_ayu_files_visibility.py",
         "apply_ayu_deleted_visual_hotfix.py",
         "apply_ayu_presence_toggle_hotfix.py",
     )
@@ -52,13 +53,19 @@ def main() -> None:
     manager = (telegram / "submodules/TelegramCore/Sources/State/AccountStateManager.swift").read_text(encoding="utf-8")
     require("LocalMessageTags(rawValue: 1 << 30)" in manager, "real-time deleted invalidation tag missing")
     require("AYU_DELETED_ARCHIVE_v0_3" in manager, "deleted archive hook missing")
-    require('documents.appendingPathComponent("AyuGram"' in manager, "Documents/AyuGram archive root missing")
+    require("        let root = documents\n" in manager, "archive must use exposed Documents root")
+    require('documents.appendingPathComponent("AyuGram"' not in manager, "nested AyuGram/AyuGram archive layer returned")
     require('appendingPathComponent("Downloads"' not in manager, "obsolete Documents/Downloads archive layer returned")
     require("Saved attachments" in manager, "saved attachments folder missing")
     require("deleted.sqlite" in manager, "deleted SQLite database missing")
     require("CREATE TABLE IF NOT EXISTS deleted_messages" in manager, "deleted-message database schema missing")
     require("CREATE TABLE IF NOT EXISTS attachments" in manager, "attachment database schema missing")
     require("resourceData(attachment.resource)" in manager and "take(1)" in manager, "attachment archival must be one-shot, not a long-lived watcher")
+
+    plist = (telegram / "Telegram/Telegram-iOS/InfoBazel.plist").read_text(encoding="utf-8")
+    require("<string>AyuGram</string>" in plist, "AyuGram Files folder/display name missing")
+    require("<key>UIFileSharingEnabled</key>\n\t<true/>" in plist, "UIFileSharingEnabled is not enabled")
+    require("<key>LSSupportsOpeningDocumentsInPlace</key>\n\t<true/>" in plist, "open-in-place Files support is not enabled")
 
     runtime = (telegram / "submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift").read_text(encoding="utf-8")
     require("case telegram = 8" in runtime, "Telegram-theme deleted background option missing")
