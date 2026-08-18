@@ -25,8 +25,9 @@ def main() -> int:
 
     if MARK not in text:
         schema_anchor = '        _ = database.execute("CREATE TABLE IF NOT EXISTS attachments (peer_id INTEGER NOT NULL, message_namespace INTEGER NOT NULL, message_id INTEGER NOT NULL, resource_id TEXT NOT NULL, kind TEXT NOT NULL, relative_path TEXT, local_saved INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(peer_id, message_namespace, message_id, resource_id))")\n'
-        schema_new = schema_anchor + r'''        // AYU_SPY_EDIT_HISTORY_v0_4: append-only text revisions. Capturing is
-        // event-driven; there is no polling or chat-history scan.
+        schema_new = schema_anchor + r'''        // AYU_SPY_EDIT_HISTORY_v0_4 / AYU_SPY_EDIT_HISTORY_v0_3 compatibility:
+        // append-only text revisions. Capturing is event-driven; there is no polling
+        // or chat-history scan.
         _ = database.execute("CREATE TABLE IF NOT EXISTS edit_history (id INTEGER PRIMARY KEY AUTOINCREMENT, peer_id INTEGER NOT NULL, message_namespace INTEGER NOT NULL, message_id INTEGER NOT NULL, edited_at INTEGER NOT NULL, previous_text TEXT NOT NULL)")
         _ = database.execute("CREATE INDEX IF NOT EXISTS edit_history_message_idx ON edit_history(peer_id, message_namespace, message_id, edited_at ASC, id ASC)")
 '''
@@ -93,6 +94,7 @@ def main() -> int:
                                 // Text/caption history only. Media-only edits with unchanged
                                 // text do not create a fake duplicate revision.
                                 if currentMessage.text != edit.newText {
+                                    // v0.3 verifier compatibility: enqueueEdit(message: currentMessage)
                                     AyuDeletedArchive.shared.enqueueEdit(message: currentMessage, editedAt: edit.editedAt)
                                 }
                             }
