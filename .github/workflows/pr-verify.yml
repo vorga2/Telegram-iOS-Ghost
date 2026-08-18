@@ -122,6 +122,9 @@ jobs:
       - name: Apply AyuGram category settings
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_settings_categories.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Apply Spy settings
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_spy_settings.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Create build configuration
         shell: bash
         run: |
