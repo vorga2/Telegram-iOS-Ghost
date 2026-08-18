@@ -19,9 +19,6 @@ def main() -> int:
 
     root = Path(sys.argv[1]).resolve()
 
-    # Telegram delivers content-consumed updates separately from ordinary outbox
-    # reads. Persist first-seen content-read timestamps with peer-qualified keys so
-    # supergroups are safe too. Broadcast channels are deliberately excluded.
     state_utils = root / "submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift"
     text = state_utils.read_text(encoding="utf-8")
     if MARK not in text:
@@ -52,8 +49,6 @@ private final class AyuSpyContentReadDateArchive {
         }
         _ = database.execute("PRAGMA journal_mode=WAL")
         _ = database.execute("PRAGMA synchronous=NORMAL")
-        // Keep the v1 table untouched for compatibility with already-installed test
-        // builds, but all new writes use peer-qualified v2 rows.
         _ = database.execute("CREATE TABLE IF NOT EXISTS content_read_receipts (global_message_id INTEGER PRIMARY KEY, read_at INTEGER NOT NULL)")
         _ = database.execute("CREATE TABLE IF NOT EXISTS content_read_receipts_v2 (peer_id INTEGER NOT NULL, message_id INTEGER NOT NULL, read_at INTEGER NOT NULL, PRIMARY KEY(peer_id, message_id))")
         _ = database.execute("CREATE INDEX IF NOT EXISTS content_read_receipts_v2_lookup_idx ON content_read_receipts_v2(peer_id, message_id, read_at)")
@@ -80,6 +75,8 @@ private final class AyuSpyContentReadDateArchive {
         guard AyuRuntimeSettings.snapshot.saveReadDates, !globalMessageIds.isEmpty else {
             return
         }
+        // updateReadMessagesContents carries Telegram's own date on supported paths.
+        // Only fall back to the phone clock when Telegram provides no timestamp.
         let readAt = Int64(serverTimestamp ?? Int32(Date().timeIntervalSince1970))
         let ids = Array(Set(globalMessageIds))
         let _ = (postbox.transaction { transaction -> [MessageId] in
@@ -127,7 +124,7 @@ private final class AyuSpyContentReadDateArchive {
 '''
         generic_new = '''            case let .updateReadMessagesContents(updateReadMessagesContentsData):
                 updatedState.addReadMessagesContents((nil, nil, updateReadMessagesContentsData.messages), date: updateReadMessagesContentsData.date)
-                AyuSpyContentReadDateArchive.shared.enqueueGlobal(postbox: postbox, globalMessageIds: updateReadMessagesContentsData.messages, serverTimestamp: updateReadMessagesContentsData.date ?? serverTime)
+                AyuSpyContentReadDateArchive.shared.enqueueGlobal(postbox: postbox, globalMessageIds: updateReadMessagesContentsData.messages, serverTimestamp: updateReadMessagesContentsData.date)
 '''
         count = text.count(generic_old)
         if count < 1:
@@ -138,7 +135,7 @@ private final class AyuSpyContentReadDateArchive {
 '''
         channel_new = '''                let ayuContentReadPeerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                 updatedState.addReadMessagesContents((ayuContentReadPeerId, threadId, messages), date: nil)
-                AyuSpyContentReadDateArchive.shared.enqueueChannel(postbox: postbox, peerId: ayuContentReadPeerId, messageIds: messages, serverTimestamp: serverTime)
+                AyuSpyContentReadDateArchive.shared.enqueueChannel(postbox: postbox, peerId: ayuContentReadPeerId, messageIds: messages, serverTimestamp: nil)
 '''
         count = text.count(channel_old)
         if count < 1:
@@ -146,7 +143,6 @@ private final class AyuSpyContentReadDateArchive {
         text = text.replace(channel_old, channel_new)
         state_utils.write_text(text, encoding="utf-8")
 
-    # Extend the indexed Details lookup created by apply_ayu_spy_details.py.
     manager = root / "submodules/TelegramCore/Sources/State/AccountStateManager.swift"
     text = manager.read_text(encoding="utf-8")
     if "localContentReadAt" not in text:
@@ -178,8 +174,6 @@ private final class AyuSpyContentReadDateArchive {
             "return AyuSpyStoredMessageDetails(deletedAt: nil, localReadAt: nil, localContentReadAt: nil)",
         )
 
-        # Regular read fallback is valid for supergroups now. Broadcasts never get
-        # rows because the writer resolves TelegramChannel.info and rejects them.
         old_regular = '''    if AyuRuntimeSettings.snapshot.saveReadDates && messageId.peerId.namespace != Namespaces.Peer.CloudChannel {
         let readRows = database.queryRows("SELECT read_at FROM read_receipts WHERE peer_id = \\(peerId) AND max_message_id >= \\(messageId.id) ORDER BY read_at ASC LIMIT 1")
 '''
@@ -196,7 +190,6 @@ private final class AyuSpyContentReadDateArchive {
         if let row = contentRows.first, let value = row.first ?? nil {
             localContentReadAt = Int64(value)
         } else if messageId.peerId.namespace != Namespaces.Peer.CloudChannel {
-            // Upgrade fallback for test builds that wrote the old global-id table.
             let legacyRows = database.queryRows("SELECT read_at FROM content_read_receipts WHERE global_message_id = \(messageId.id) LIMIT 1")
             if let row = legacyRows.first, let value = row.first ?? nil {
                 localContentReadAt = Int64(value)
@@ -209,8 +202,6 @@ private final class AyuSpyContentReadDateArchive {
         text = one(text, old_return, new_return, "stored content-read query")
         manager.write_text(text, encoding="utf-8")
 
-    # Voice messages and instant videos show true content-consumed time only. Do
-    # not substitute the generic message read timestamp: those events are different.
     menu = root / "submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift"
     text = menu.read_text(encoding="utf-8")
     if "effectiveContentReadAt" not in text:
