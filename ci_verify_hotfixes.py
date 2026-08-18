@@ -32,6 +32,7 @@ def main() -> None:
         "apply_ayu_deleted_visual_hotfix.py",
         "apply_ayu_presence_toggle_hotfix.py",
         "apply_ayu_settings_categories.py",
+        "apply_ayu_spy_settings.py",
     )
     for name in patchers:
         py_compile.compile(str(workspace / name), doraise=True)
@@ -76,13 +77,23 @@ def main() -> None:
     require("AyuDeletedMarkerColor.telegram.rawValue" in runtime, "Telegram theme is not the deleted-background default")
     require("case readOnActions = 9" in runtime, "read-on-actions option missing")
     require("case useScheduled = 10" in runtime, "scheduled option missing")
+    require("case saveEditHistory = 11" in runtime, "Spy edit-history option missing")
+    require("case saveReadDates = 12" in runtime, "Spy read-date option missing")
     require("readOnActions: storedValue(.readOnActions" in runtime, "read-on-actions default persistence missing")
+    require("saveEditHistory: storedValue(.saveEditHistory" in runtime, "Spy edit-history persistence missing")
+    require("saveReadDates: storedValue(.saveReadDates" in runtime, "Spy read-date persistence missing")
 
     settings = (telegram / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift").read_text(encoding="utf-8")
     require('title: .text("Настройки AyuGram")' in settings, "AyuGram settings title missing")
     require('text: "КАТЕГОРИИ"' in settings, "categories header missing")
     require('title: "Режим Призрака"' in settings, "Ghost category missing")
     require('title: "Кастомизация"' in settings, "Customization category missing")
+    require('title: "Шпион"' in settings, "Spy category missing")
+    require('text: "РЕЖИМ ШПИОНА"' in settings, "Spy section header missing")
+    require('title: "Сохранять удалённые сообщения"' in settings, "Spy deleted toggle missing")
+    require('title: "Сохранять историю правок"' in settings, "Spy edit-history toggle missing")
+    require('title: "Сохранять дату прочтения"' in settings, "Spy read-date toggle missing")
+    require("Локально сохраняет данные о чтении сообщений" in settings, "Spy read-date description missing")
     require('"Режим призрака \\(enabledCount)/5"' in settings, "Ghost 5/5 counter missing")
     require('title: "Читать при действиях"' in settings, "read-on-actions toggle missing")
     require('title: "Использовать отложку"' in settings, "scheduled toggle missing")
