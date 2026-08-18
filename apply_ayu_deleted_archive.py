@@ -141,7 +141,7 @@ private final class AyuDeletedArchive {
     }
 
     private func store(snapshot: AyuDeletedArchiveSnapshot, mediaBox: MediaBox) {
-        guard let (rootPath, database) = self.prepare() else {
+        guard let (_, database) = self.prepare() else {
             return
         }
 
