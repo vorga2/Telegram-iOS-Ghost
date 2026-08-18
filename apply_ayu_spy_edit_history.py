@@ -155,7 +155,8 @@ public func ayuSpyEditHistory(_ messageId: MessageId) -> [AyuSpyEditRevision] {
 
     # Edits made by this same client are applied directly in RequestEditMessage
     # before a normal AccountStateManager live update is guaranteed to arrive.
-    # Save the previous Postbox text at those two direct replacement sites too.
+    # Patch only the two edit cases; updateNewMessage has a visually identical
+    # transaction.updateMessage block and must not be treated as a revision.
     request_edit = root / "submodules/TelegramCore/Sources/PendingMessages/RequestEditMessage.swift"
     request_text = request_edit.read_text(encoding="utf-8")
     if OWN_MARK not in request_text:
@@ -174,10 +175,23 @@ public func ayuSpyEditHistory(_ messageId: MessageId) -> [AyuSpyEditRevision] {
                                                 }
                                                 var updatedFlags = message.flags
 '''
-        count = request_text.count(own_anchor)
-        if count != 2:
-            raise RuntimeError(f"own edit replacement anchors: expected 2, found {count}")
-        request_text = request_text.replace(own_anchor, own_new)
+
+        def patch_edit_case(source: str, case_marker: str, label: str) -> str:
+            start = source.find(case_marker)
+            if start < 0:
+                raise RuntimeError(f"{label}: case marker not found")
+            end = source.find("\n                                    case ", start + len(case_marker))
+            if end < 0:
+                end = len(source)
+            anchor_index = source.find(own_anchor, start, end)
+            if anchor_index < 0:
+                raise RuntimeError(f"{label}: updateMessage anchor not found inside case")
+            if source.find(own_anchor, anchor_index + 1, end) >= 0:
+                raise RuntimeError(f"{label}: multiple updateMessage anchors inside case")
+            return source[:anchor_index] + own_new + source[anchor_index + len(own_anchor):]
+
+        request_text = patch_edit_case(request_text, "                                    case .updateEditMessage(let data):", "own message edit")
+        request_text = patch_edit_case(request_text, "                                    case .updateEditChannelMessage(let data):", "own channel edit")
     request_edit.write_text(request_text, encoding="utf-8")
 
     payload = Path(__file__).resolve().parent / "payload" / "AyuEditHistoryController.swift"
