@@ -33,6 +33,7 @@ def main() -> None:
         "apply_ayu_presence_toggle_hotfix.py",
         "apply_ayu_settings_categories.py",
         "apply_ayu_spy_settings.py",
+        "apply_ayu_spy_edit_history.py",
     )
     for name in patchers:
         py_compile.compile(str(workspace / name), doraise=True)
@@ -58,6 +59,12 @@ def main() -> None:
     manager = (telegram / "submodules/TelegramCore/Sources/State/AccountStateManager.swift").read_text(encoding="utf-8")
     require("LocalMessageTags(rawValue: 1 << 30)" in manager, "real-time deleted invalidation tag missing")
     require("AYU_DELETED_ARCHIVE_v0_3" in manager, "deleted archive hook missing")
+    require("AYU_SPY_EDIT_HISTORY_v0_3" in manager, "Spy edit-history hook missing")
+    require("CREATE TABLE IF NOT EXISTS edit_history" in manager, "Spy edit-history table missing")
+    require("edit_history_message_idx" in manager, "Spy edit-history index missing")
+    require("AyuRuntimeSettings.snapshot.saveEditHistory" in manager, "Spy edit-history toggle not enforced")
+    require("case .updateEditMessage, .updateEditChannelMessage" in manager, "remote edit updates are not intercepted")
+    require("transaction.getMessage(id)" in manager and "enqueueEdit(message: currentMessage)" in manager, "previous revision is not captured before replacement")
     require("        let root = documents\n" in manager, "archive must use exposed Documents root")
     require('documents.appendingPathComponent("AyuGram"' not in manager, "nested AyuGram/AyuGram archive layer returned")
     require('appendingPathComponent("Downloads"' not in manager, "obsolete Documents/Downloads archive layer returned")
