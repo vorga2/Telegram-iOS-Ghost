@@ -33,7 +33,22 @@ def main() -> int:
         text = one(text, old, new, "settings toggle presence")
     settings.write_text(text, encoding="utf-8")
 
-    print("[ayu-presence-toggle] Ghost presence now applies immediately on toggle")
+    # AYU_SWIFT_NO_USAGE_FIX_v0_3: the deleted-visual hotfix originally used
+    # ayuUsesTelegramTheme to drive bubble alpha. Whole-item alpha replaced that
+    # behavior later, leaving the local immutable value unused under Swift's
+    # warnings-as-errors build. Remove the dead flag and its assignments after
+    # the visual hotfix has run; this does not change deleted-message rendering.
+    bubble = root / "submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift"
+    bubble_text = bubble.read_text(encoding="utf-8")
+    bubble_text = bubble_text.replace("        let ayuUsesTelegramTheme: Bool\n", "")
+    bubble_text = bubble_text.replace("                ayuUsesTelegramTheme = true\n", "")
+    bubble_text = bubble_text.replace("                ayuUsesTelegramTheme = false\n", "")
+    bubble_text = bubble_text.replace("            ayuUsesTelegramTheme = false\n", "")
+    if "ayuUsesTelegramTheme" in bubble_text:
+        raise RuntimeError("unused Telegram-theme flag cleanup incomplete")
+    bubble.write_text(bubble_text, encoding="utf-8")
+
+    print("[ayu-presence-toggle] Ghost presence now applies immediately on toggle; removed dead deleted-theme flag")
     return 0
 
 
