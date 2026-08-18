@@ -4,6 +4,7 @@ import sys
 
 MARK = "AYU_SPY_EDIT_HISTORY_v0_4"
 VIEWER_MARK = "AYU_EDIT_HISTORY_VIEWER_v0_3"
+OWN_MARK = "AYU_SPY_OWN_EDIT_HISTORY_v0_3"
 
 
 def one(text: str, old: str, new: str, label: str) -> str:
@@ -105,7 +106,13 @@ def main() -> int:
         text = one(text, groups_anchor, groups_new, "live edit update-group interception")
 
         query_anchor = '''private enum AccountStateManagerOperationContent {\n'''
-        query_helper = r'''public struct AyuSpyEditRevision: Equatable {
+        query_helper = r'''// Shared entry point for edits initiated by this client. The archive class itself
+// remains file-private; RequestEditMessage can still save the old revision here.
+public func ayuSpyStoreEditRevision(_ message: Message, editedAt: Int64) {
+    AyuDeletedArchive.shared.enqueueEdit(message: message, editedAt: editedAt)
+}
+
+public struct AyuSpyEditRevision: Equatable {
     public let editedAt: Int64
     public let text: String
 
@@ -144,6 +151,33 @@ public func ayuSpyEditHistory(_ messageId: MessageId) -> [AyuSpyEditRevision] {
 
     manager.write_text(text, encoding="utf-8")
 
+    # Edits made by this same client are applied directly in RequestEditMessage
+    # before a normal AccountStateManager live update is guaranteed to arrive.
+    # Save the previous Postbox text at those two direct replacement sites too.
+    request_edit = root / "submodules/TelegramCore/Sources/PendingMessages/RequestEditMessage.swift"
+    request_text = request_edit.read_text(encoding="utf-8")
+    if OWN_MARK not in request_text:
+        own_anchor = '''                                            transaction.updateMessage(id, update: { previousMessage in\n                                                var updatedFlags = message.flags\n'''
+        own_new = r'''                                            transaction.updateMessage(id, update: { previousMessage in
+                                                // AYU_SPY_OWN_EDIT_HISTORY_v0_3
+                                                if previousMessage.text != message.text {
+                                                    var ayuEditedAt = Int32(Date().timeIntervalSince1970)
+                                                    for attribute in message.attributes {
+                                                        if let edited = attribute as? EditedMessageAttribute {
+                                                            ayuEditedAt = edited.date
+                                                            break
+                                                        }
+                                                    }
+                                                    ayuSpyStoreEditRevision(previousMessage, editedAt: Int64(ayuEditedAt))
+                                                }
+                                                var updatedFlags = message.flags
+'''
+        count = request_text.count(own_anchor)
+        if count != 2:
+            raise RuntimeError(f"own edit replacement anchors: expected 2, found {count}")
+        request_text = request_text.replace(own_anchor, own_new)
+    request_edit.write_text(request_text, encoding="utf-8")
+
     payload = Path(__file__).resolve().parent / "payload" / "AyuEditHistoryController.swift"
     if not payload.exists():
         raise RuntimeError(f"missing edit-history viewer payload: {payload}")
@@ -180,7 +214,7 @@ public func ayuSpyEditHistory(_ messageId: MessageId) -> [AyuSpyEditRevision] {
         menu_text = one(menu_text, return_anchor, menu_code + return_anchor, "edit-history context menu")
     menu.write_text(menu_text, encoding="utf-8")
 
-    print("[ayu-spy-edit-history] live PM/group/channel capture + chat-style revision viewer installed")
+    print("[ayu-spy-edit-history] incoming + own PM/group/channel history and chat-style viewer installed")
     return 0
 
 
