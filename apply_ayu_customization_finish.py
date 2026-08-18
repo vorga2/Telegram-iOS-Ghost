@@ -2,6 +2,8 @@
 from pathlib import Path
 import sys
 
+import apply_ayu_deleted_visual_compile_fix as visual_compile_fix
+
 MARK = "AYU_CUSTOMIZATION_FINISH_v0_3"
 
 
@@ -118,6 +120,12 @@ def main() -> int:
             "icon-only marker preview",
         )
     settings.write_text(text, encoding="utf-8")
+
+    # The visual hotfix used to keep a temporary per-bubble Telegram-theme flag.
+    # Whole-message opacity superseded it, leaving a write-only Swift local that
+    # fails Telegram's warnings-as-errors build. Remove it in both verification
+    # and the real IPA pipeline so they compile the same final source.
+    visual_compile_fix.main()
 
     print("[ayu-customization-finish] translucent deleted toggle + icon-only marker picker installed")
     return 0
