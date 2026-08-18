@@ -46,9 +46,39 @@ def main() -> int:
     new = '''        let ayuDeletedBackgroundColor: UIColor?\n        let ayuUsesTelegramTheme: Bool\n        if AyuRuntimeSettings.isDeleted(item.message.id) && !AyuRuntimeSettings.isInDeletedViewer(item.message.id) {\n            switch AyuDeletedMarkerColor(rawValue: AyuRuntimeSettings.snapshot.deletedMarkerColor) ?? .telegram {\n            case .telegram:\n                ayuDeletedBackgroundColor = nil\n                ayuUsesTelegramTheme = true\n            case .red:\n                ayuDeletedBackgroundColor = UIColor.systemRed.withAlphaComponent(CGFloat(AyuRuntimeSettings.deletedMessageAlpha))\n                ayuUsesTelegramTheme = false\n            case .orange:\n                ayuDeletedBackgroundColor = UIColor.systemOrange.withAlphaComponent(CGFloat(AyuRuntimeSettings.deletedMessageAlpha))\n                ayuUsesTelegramTheme = false\n            case .gray:\n                ayuDeletedBackgroundColor = UIColor.systemGray.withAlphaComponent(CGFloat(AyuRuntimeSettings.deletedMessageAlpha))\n                ayuUsesTelegramTheme = false\n            case .purple:\n                ayuDeletedBackgroundColor = UIColor.systemPurple.withAlphaComponent(CGFloat(AyuRuntimeSettings.deletedMessageAlpha))\n                ayuUsesTelegramTheme = false\n            case .pink:\n                ayuDeletedBackgroundColor = UIColor.systemPink.withAlphaComponent(CGFloat(AyuRuntimeSettings.deletedMessageAlpha))\n                ayuUsesTelegramTheme = false\n            case .magenta:\n                ayuDeletedBackgroundColor = UIColor(red: 0.86, green: 0.12, blue: 0.46, alpha: CGFloat(AyuRuntimeSettings.deletedMessageAlpha))\n                ayuUsesTelegramTheme = false\n            case .indigo:\n                ayuDeletedBackgroundColor = UIColor.systemIndigo.withAlphaComponent(CGFloat(AyuRuntimeSettings.deletedMessageAlpha))\n                ayuUsesTelegramTheme = false\n            case .blue:\n                ayuDeletedBackgroundColor = UIColor.systemBlue.withAlphaComponent(CGFloat(AyuRuntimeSettings.deletedMessageAlpha))\n                ayuUsesTelegramTheme = false\n            }\n        } else {\n            ayuDeletedBackgroundColor = nil\n            ayuUsesTelegramTheme = false\n        }\n        strongSelf.backgroundNode.ayuCustomFillColor = ayuDeletedBackgroundColor\n        let ayuBackgroundMaskMode = ayuDeletedBackgroundColor == nil ? strongSelf.backgroundMaskMode : false\n        strongSelf.backgroundNode.alpha = ayuUsesTelegramTheme ? CGFloat(AyuRuntimeSettings.deletedMessageAlpha) : 1.0\n        strongSelf.backgroundWallpaperNode.alpha = ayuUsesTelegramTheme ? CGFloat(AyuRuntimeSettings.deletedMessageAlpha) : 1.0\n\n        strongSelf.backgroundNode.setType(type: backgroundType, highlighted: false, graphics: graphics, maskMode: ayuBackgroundMaskMode, hasWallpaper: hasWallpaper, transition: legacyTransition, backgroundNode: presentationContext.backgroundNode)\n        strongSelf.backgroundWallpaperNode.setType(type: backgroundType, theme: item.presentationData.theme, essentialGraphics: graphics, maskMode: strongSelf.backgroundMaskMode, backgroundNode: presentationContext.backgroundNode)\n'''
     if "ayuUsesTelegramTheme" not in t:
         t = one(t, old, new, "Telegram-theme deleted bubble")
+
+    # Point 4: opacity belongs to the complete message item, not just its bubble.
+    # Keep the background itself opaque so the parent 0.5 alpha is applied exactly
+    # once to text, media, round video, voice controls, date/status and avatar.
+    for old_value, new_value in (
+        ("UIColor.systemRed.withAlphaComponent(CGFloat(AyuRuntimeSettings.deletedMessageAlpha))", "UIColor.systemRed"),
+        ("UIColor.systemOrange.withAlphaComponent(CGFloat(AyuRuntimeSettings.deletedMessageAlpha))", "UIColor.systemOrange"),
+        ("UIColor.systemGray.withAlphaComponent(CGFloat(AyuRuntimeSettings.deletedMessageAlpha))", "UIColor.systemGray"),
+        ("UIColor.systemPurple.withAlphaComponent(CGFloat(AyuRuntimeSettings.deletedMessageAlpha))", "UIColor.systemPurple"),
+        ("UIColor.systemPink.withAlphaComponent(CGFloat(AyuRuntimeSettings.deletedMessageAlpha))", "UIColor.systemPink"),
+        ("UIColor.systemIndigo.withAlphaComponent(CGFloat(AyuRuntimeSettings.deletedMessageAlpha))", "UIColor.systemIndigo"),
+        ("UIColor.systemBlue.withAlphaComponent(CGFloat(AyuRuntimeSettings.deletedMessageAlpha))", "UIColor.systemBlue"),
+        ("UIColor(red: 0.86, green: 0.12, blue: 0.46, alpha: CGFloat(AyuRuntimeSettings.deletedMessageAlpha))", "UIColor(red: 0.86, green: 0.12, blue: 0.46, alpha: 1.0)"),
+        ("strongSelf.backgroundNode.alpha = ayuUsesTelegramTheme ? CGFloat(AyuRuntimeSettings.deletedMessageAlpha) : 1.0", "strongSelf.backgroundNode.alpha = 1.0"),
+        ("strongSelf.backgroundWallpaperNode.alpha = ayuUsesTelegramTheme ? CGFloat(AyuRuntimeSettings.deletedMessageAlpha) : 1.0", "strongSelf.backgroundWallpaperNode.alpha = 1.0"),
+    ):
+        t = t.replace(old_value, new_value)
     bubble.write_text(t, encoding="utf-8")
 
-    print("[ayu-deleted-visual-hotfix] marker restored; default background follows Telegram theme")
+    message_item = root / "submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageItemImpl.swift"
+    t = message_item.read_text(encoding="utf-8")
+    initial_anchor = '''            node.updateSelectionState(animated: false)\n            node.updateHighlightedState(animated: false)\n            \n            Queue.mainQueue().async {\n'''
+    initial_new = '''            node.updateSelectionState(animated: false)\n            node.updateHighlightedState(animated: false)\n\n            // AYU_DELETED_FULL_ITEM_ALPHA_v0_3: fade the complete rendered item.\n            // This intentionally includes media, voice/round-video controls, status\n            // text and the item's avatar. Deleted viewer remains stock opacity.\n            let ayuDeletedWholeItem = AyuRuntimeSettings.isDeleted(self.message.id) && !AyuRuntimeSettings.isInDeletedViewer(self.message.id)\n            node.alpha = ayuDeletedWholeItem ? CGFloat(AyuRuntimeSettings.deletedMessageAlpha) : 1.0\n            \n            Queue.mainQueue().async {\n'''
+    if "AYU_DELETED_FULL_ITEM_ALPHA_v0_3" not in t:
+        t = one(t, initial_anchor, initial_new, "initial whole-message alpha")
+
+    reuse_anchor = '''                                nodeValue.safeInsets = UIEdgeInsets(top: 0.0, left: params.leftInset, bottom: 0.0, right: params.rightInset)\n                                nodeValue.updateSelectionState(animated: false)\n                                nodeValue.updateHighlightedState(animated: false)\n'''
+    reuse_new = '''                                nodeValue.safeInsets = UIEdgeInsets(top: 0.0, left: params.leftInset, bottom: 0.0, right: params.rightInset)\n                                nodeValue.updateSelectionState(animated: false)\n                                nodeValue.updateHighlightedState(animated: false)\n                                let ayuDeletedWholeItem = AyuRuntimeSettings.isDeleted(self.message.id) && !AyuRuntimeSettings.isInDeletedViewer(self.message.id)\n                                nodeValue.alpha = ayuDeletedWholeItem ? CGFloat(AyuRuntimeSettings.deletedMessageAlpha) : 1.0\n'''
+    if "nodeValue.alpha = ayuDeletedWholeItem" not in t:
+        t = one(t, reuse_anchor, reuse_new, "reused whole-message alpha")
+    message_item.write_text(t, encoding="utf-8")
+
+    print("[ayu-deleted-visual-hotfix] marker restored; Telegram-theme default; full deleted item alpha 0.5")
     return 0
 
 
