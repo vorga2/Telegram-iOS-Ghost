@@ -153,11 +153,13 @@ def patch_account_state_manager(path: Path) -> None:
                 }
 
                 var touched = Set<MessageId>()
-                for id in resolvedMessageIds {
-                    guard touched.insert(id).inserted else {
+                // Keep this loop structurally distinct from the raw-update loop above:
+                // apply_ayu_deleted_archive.py intentionally hooks the raw loop only.
+                for messageId in resolvedMessageIds {
+                    guard touched.insert(messageId).inserted else {
                         continue
                     }
-                    transaction.updateMessage(id, update: { currentMessage in
+                    transaction.updateMessage(messageId, update: { currentMessage in
                         // Toggle one private local tag bit instead of re-storing an
                         // identical message. Postbox therefore cannot coalesce this
                         // update and every active history view receives a real change.
