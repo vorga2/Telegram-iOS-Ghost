@@ -2,7 +2,7 @@
 from pathlib import Path
 import sys
 
-MARK = "AYU_SPY_READ_DATES_v0_3"
+MARK = "AYU_SPY_READ_DATES_v0_4"
 
 
 def one(text: str, old: str, new: str, label: str) -> str:
@@ -26,11 +26,11 @@ def main() -> int:
         return 0
 
     helper_anchor = "private func reactionGeneratedEvent("
-    helper = r'''// AYU_SPY_READ_DATES_v0_3
-// Local fallback read timestamps for outgoing messages. We store only monotonic
-// max-read events, not one row per message, so there is no history scan and very
-// little disk traffic. Details can later resolve a message to the earliest event
-// whose max_message_id covers it.
+    helper = r'''// AYU_SPY_READ_DATES_v0_4 / AYU_SPY_READ_DATES_v0_3 compatibility
+// Local fallback read timestamps for outgoing messages. We persist only max-read
+// boundaries, not one row per message, so the hot path stays O(1) and disk traffic
+// remains tiny. Private chats, basic groups and supergroups are supported; Telegram
+// broadcast channels are deliberately excluded.
 private final class AyuSpyReadDateArchive {
     static let shared = AyuSpyReadDateArchive()
 
@@ -64,23 +64,48 @@ private final class AyuSpyReadDateArchive {
         return database
     }
 
-    func enqueue(peerId: PeerId, maxMessageId: Int32) {
-        guard AyuRuntimeSettings.snapshot.saveReadDates else {
-            return
-        }
-        // Channels use separate read state semantics and are intentionally excluded.
-        guard peerId.namespace != Namespaces.Peer.CloudChannel else {
-            return
-        }
-
+    private func enqueueWrite(peerId: PeerId, maxMessageId: Int32, readAt: Int64) {
         let peer = peerId.toInt64()
-        let readAt = Int64(Date().timeIntervalSince1970)
         self.queue.async { [weak self] in
             guard let self, let database = self.prepare() else {
                 return
             }
-            // Preserve the first time we observed this exact max-read boundary.
+            // Preserve the first timestamp observed for this exact read boundary.
             _ = database.execute("INSERT OR IGNORE INTO read_receipts(peer_id, max_message_id, read_at) VALUES (\(peer), \(maxMessageId), \(readAt))")
+        }
+    }
+
+    func enqueue(postbox: Postbox, peerId: PeerId, maxMessageId: Int32, serverTimestamp: Int32?) {
+        guard AyuRuntimeSettings.snapshot.saveReadDates else {
+            return
+        }
+
+        // Prefer Telegram/network time. The local wall clock is only a fallback for
+        // unusual paths where no server-derived timestamp is available.
+        let readAt = Int64(serverTimestamp ?? Int32(Date().timeIntervalSince1970))
+
+        if peerId.namespace == Namespaces.Peer.CloudChannel {
+            // CloudChannel is shared by broadcast channels and supergroups. Resolve
+            // the actual peer type once per read update so groups are kept while
+            // broadcast channels remain excluded as required by Spy mode.
+            let _ = (postbox.transaction { transaction -> Bool in
+                guard let channel = transaction.getPeer(peerId) as? TelegramChannel else {
+                    return false
+                }
+                if case .group = channel.info {
+                    return true
+                } else {
+                    return false
+                }
+            }
+            |> take(1)).start(next: { [weak self] shouldStore in
+                guard shouldStore else {
+                    return
+                }
+                self?.enqueueWrite(peerId: peerId, maxMessageId: maxMessageId, readAt: readAt)
+            })
+        } else {
+            self.enqueueWrite(peerId: peerId, maxMessageId: maxMessageId, readAt: readAt)
         }
     }
 }
@@ -94,12 +119,22 @@ private final class AyuSpyReadDateArchive {
     read_new = '''            case let .updateReadHistoryOutbox(updateReadHistoryOutboxData):
                 let ayuReadMessageId = MessageId(peerId: updateReadHistoryOutboxData.peer.peerId, namespace: Namespaces.Message.Cloud, id: updateReadHistoryOutboxData.maxId)
                 updatedState.readOutbox(ayuReadMessageId, timestamp: updatesDate)
-                AyuSpyReadDateArchive.shared.enqueue(peerId: ayuReadMessageId.peerId, maxMessageId: ayuReadMessageId.id)
+                AyuSpyReadDateArchive.shared.enqueue(postbox: postbox, peerId: ayuReadMessageId.peerId, maxMessageId: ayuReadMessageId.id, serverTimestamp: updatesDate ?? serverTime)
 '''
-    text = one(text, read_anchor, read_new, "outgoing read update")
+    text = one(text, read_anchor, read_new, "private/basic-group outgoing read update")
+
+    channel_anchor = '''            case let .updateReadChannelOutbox(updateReadChannelOutboxData):
+                updatedState.readOutbox(MessageId(peerId: PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(updateReadChannelOutboxData.channelId)), namespace: Namespaces.Message.Cloud, id: updateReadChannelOutboxData.maxId), timestamp: nil)
+'''
+    channel_new = '''            case let .updateReadChannelOutbox(updateReadChannelOutboxData):
+                let ayuReadChannelMessageId = MessageId(peerId: PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(updateReadChannelOutboxData.channelId)), namespace: Namespaces.Message.Cloud, id: updateReadChannelOutboxData.maxId)
+                updatedState.readOutbox(ayuReadChannelMessageId, timestamp: nil)
+                AyuSpyReadDateArchive.shared.enqueue(postbox: postbox, peerId: ayuReadChannelMessageId.peerId, maxMessageId: ayuReadChannelMessageId.id, serverTimestamp: serverTime)
+'''
+    text = one(text, channel_anchor, channel_new, "supergroup outgoing read update")
 
     path.write_text(text, encoding="utf-8")
-    print("[ayu-spy-read-dates] local private/group read-date ranges installed")
+    print("[ayu-spy-read-dates] private/basic-group/supergroup read dates installed; broadcasts excluded")
     return 0
 
 
