@@ -77,9 +77,9 @@ def patch_account_state_manager(path: Path) -> None:
                     }
                 }
 
-                // Re-store the exact same message. Postbox emits its ordinary message
-                // update operation, which refreshes an already-visible chat item. No
-                // polling, timers, full-history scan or per-frame work is introduced.
+                // Keep the early raw-update invalidation for the fastest common path.
+                // A second guaranteed invalidation is performed from final-state events
+                // below, after Telegram has fully processed the update/difference.
                 var touched = Set<MessageId>()
                 for id in resolvedMessageIds {
                     guard touched.insert(id).inserted else {
@@ -114,10 +114,80 @@ def patch_account_state_manager(path: Path) -> None:
                 guard let self, !deletedEvents.isEmpty else {
                     return
                 }
-                // Preserve Telegram's existing deletedMessages signal semantics for
-                // any UI/controllers that already listen to AccountStateManager.
                 self.deletedMessagesPipe.putNext(deletedEvents)
             })
+        }
+
+        // AYU_IOS_DELETED_REALTIME_FINAL_v0_3
+        // Raw addUpdates is not the only source of deletions: gaps/differences and
+        // channel synchronization can produce them later through AccountFinalStateEvents.
+        // Refresh from that canonical event too. This guarantees that the visible
+        // message changes immediately without a long-press or reopening the chat.
+        private func ayuRefreshPreservedDeletedEventIds(_ deletedIds: [DeletedMessageId]) {
+            guard AyuRuntimeSettings.keepDeletedMessages, !deletedIds.isEmpty else {
+                return
+            }
+
+            var globalIds: [Int32] = []
+            var directMessageIds: [MessageId] = []
+            for id in deletedIds {
+                switch id {
+                case let .global(globalId):
+                    globalIds.append(globalId)
+                case let .messageId(messageId):
+                    directMessageIds.append(messageId)
+                }
+            }
+
+            AyuRuntimeSettings.markDeletedGlobalIds(globalIds)
+            AyuRuntimeSettings.markDeletedMessageIds(directMessageIds)
+
+            let _ = self.postbox.transaction { transaction -> Void in
+                var resolvedMessageIds = directMessageIds
+                if !globalIds.isEmpty {
+                    let resolvedGlobalIds = transaction.messageIdsForGlobalIds(globalIds)
+                    if !resolvedGlobalIds.isEmpty {
+                        resolvedMessageIds.append(contentsOf: resolvedGlobalIds)
+                        AyuRuntimeSettings.markDeletedMessageIds(resolvedGlobalIds)
+                    }
+                }
+
+                var touched = Set<MessageId>()
+                for id in resolvedMessageIds {
+                    guard touched.insert(id).inserted else {
+                        continue
+                    }
+                    transaction.updateMessage(id, update: { currentMessage in
+                        // Toggle one private local tag bit instead of re-storing an
+                        // identical message. Postbox therefore cannot coalesce this
+                        // update and every active history view receives a real change.
+                        let ayuRefreshTag = LocalMessageTags(rawValue: 1 << 29)
+                        var ayuLocalTags = currentMessage.localTags
+                        if ayuLocalTags.contains(ayuRefreshTag) {
+                            ayuLocalTags.remove(ayuRefreshTag)
+                        } else {
+                            ayuLocalTags.insert(ayuRefreshTag)
+                        }
+                        return .update(StoreMessage(
+                            id: currentMessage.id,
+                            customStableId: nil,
+                            globallyUniqueId: currentMessage.globallyUniqueId,
+                            groupingKey: currentMessage.groupingKey,
+                            threadId: currentMessage.threadId,
+                            timestamp: currentMessage.timestamp,
+                            flags: StoreMessageFlags(currentMessage.flags),
+                            tags: currentMessage.tags,
+                            globalTags: currentMessage.globalTags,
+                            localTags: ayuLocalTags,
+                            forwardInfo: currentMessage.forwardInfo.flatMap(StoreMessageForwardInfo.init),
+                            authorId: currentMessage.author?.id,
+                            text: currentMessage.text,
+                            attributes: currentMessage.attributes,
+                            media: currentMessage.media
+                        ))
+                    })
+                }
+            }.start()
         }
 
         func addUpdates(_ updates: Api.Updates) {
@@ -129,6 +199,11 @@ def patch_account_state_manager(path: Path) -> None:
 '''
 
     text = replace_once(text, old, new, "AccountStateManager.addUpdates")
+
+    old_events = """                if !events.deletedMessageIds.isEmpty {\n                    self.deletedMessagesPipe.putNext(events.deletedMessageIds)\n                }\n"""
+    new_events = """                if !events.deletedMessageIds.isEmpty {\n                    self.deletedMessagesPipe.putNext(events.deletedMessageIds)\n                    self.ayuRefreshPreservedDeletedEventIds(events.deletedMessageIds)\n                }\n"""
+    text = replace_once(text, old_events, new_events, "AccountFinalStateEvents.deletedMessageIds")
+
     path.write_text(text, encoding="utf-8")
 
 
@@ -143,7 +218,7 @@ def main() -> int:
         raise RuntimeError(f"missing Telegram source: {path}")
 
     patch_account_state_manager(path)
-    print("[ayu-deleted-realtime] event-driven visible-chat refresh installed")
+    print("[ayu-deleted-realtime] raw + final-state event refresh installed")
     return 0
 
 
