@@ -101,6 +101,9 @@ jobs:
       - name: Read current chat on send
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_send_read.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Normalize behavior hotfix anchor
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_behavior_anchor_compat.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Apply behavior hotfixes
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_behavior_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
 
@@ -115,6 +118,9 @@ jobs:
 
       - name: Apply Ghost presence immediately on toggle
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_presence_toggle_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply AyuGram category settings
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_settings_categories.py" "$RUNNER_TEMP/Telegram-iOS"
 
       - name: Create build configuration
         shell: bash
@@ -154,7 +160,7 @@ jobs:
           cd "$RUNNER_TEMP/Telegram-iOS"
           mkdir -p "$RUNNER_TEMP/output"
           python3 build-system/Make/Make.py \
-            --cacheDir="$HOME/telegram-bazel-cache" \
+            --cacheDir="$HOME/runner/telegram-bazel-cache" \
             build \
             --configurationPath=build-system/ayu-ci-configuration.json \
             --codesigningInformationPath=build-system/fake-codesigning \
