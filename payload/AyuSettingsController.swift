@@ -102,7 +102,7 @@ private enum AyuSettingsEntry: ItemListNodeEntry {
         case let .markerStyle(value):
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Метка удаления", label: value, sectionId: self.section, style: .blocks, action: { arguments.selectDeletedStyle() })
         case let .markerColor(value):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Цвет метки", label: value, sectionId: self.section, style: .blocks, action: { arguments.selectDeletedColor() })
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Цвет фона удалённых", label: value, sectionId: self.section, style: .blocks, action: { arguments.selectDeletedColor() })
         case .clearDeleted:
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Очистить метки удалённых", label: "", sectionId: self.section, style: .blocks, action: { arguments.clearDeleted() })
         }
