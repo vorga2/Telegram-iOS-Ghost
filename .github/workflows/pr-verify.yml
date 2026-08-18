@@ -48,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           REF="$(tr -d '[:space:]' < telegram-ref.txt)"
-          test -n "$REF" || { echo 'telegram-ref.txt is empty'; exit 1; }
+          test -n "$REF" || { echo "telegram-ref.txt is empty"; exit 1; }
           cd "$RUNNER_TEMP"
           rm -rf Telegram-iOS
           git init Telegram-iOS
@@ -106,6 +106,9 @@ jobs:
 
       - name: Archive deleted metadata and attachments
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_archive.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Expose AyuGram Documents in Files
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_files_visibility.py" "$RUNNER_TEMP/Telegram-iOS"
 
       - name: Restore deleted marker and Telegram-theme background default
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_visual_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
