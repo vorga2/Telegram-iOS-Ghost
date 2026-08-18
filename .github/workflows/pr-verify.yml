@@ -116,6 +116,9 @@ jobs:
       - name: Restore deleted marker and Telegram-theme background default
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_visual_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Remove dead deleted-theme render flag
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_visual_compile_fix.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Apply Ghost presence immediately on toggle
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_presence_toggle_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
 
