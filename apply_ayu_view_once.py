@@ -91,6 +91,22 @@ def patch_consume(path: Path) -> None:
     path.write_text(text)
 
 
+def patch_open_view_once_ui(path: Path) -> None:
+    text = path.read_text()
+    old = """                    closeActionTitle: isIncoming ? self.presentationData.strings.Chat_PlayOnceMesasgeCloseAndDelete : self.presentationData.strings.Chat_PlayOnceMesasgeClose,\n"""
+    new = """                    // AYU_IOS_PATCH_v0_3: incoming view-once media is preserved,\n                    // so closing the viewer must not claim it will be deleted.\n                    closeActionTitle: self.presentationData.strings.Chat_PlayOnceMesasgeClose,\n"""
+    text = replace_once(text, old, new, "view-once-close-title")
+    path.write_text(text)
+
+
+def patch_view_once_tooltip(path: Path) -> None:
+    text = path.read_text()
+    old_video = """                if isVideo {\n                    tooltipText = presentationData.strings.Chat_PlayOnceVideoMessageTooltip\n                } else {\n                    tooltipText = presentationData.strings.Chat_PlayOnceVoiceMessageTooltip\n                }\n"""
+    new_video = """                if isVideo {\n                    // AYU_IOS_PATCH_v0_3: preserved incoming one-time media stays available.\n                    tooltipText = \"Сообщение не исчезнет после просмотра\"\n                } else {\n                    tooltipText = \"Сообщение не исчезнет после просмотра\"\n                }\n"""
+    text = replace_once(text, old_video, new_video, "view-once-incoming-tooltip")
+    path.write_text(text)
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: apply_ayu_view_once.py <Telegram-iOS root>", file=sys.stderr)
@@ -99,6 +115,8 @@ def main() -> int:
     root = Path(sys.argv[1]).resolve()
     patch_runtime(root / "submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift")
     patch_consume(root / "submodules/TelegramCore/Sources/TelegramEngine/Messages/MarkMessageContentAsConsumedInteractively.swift")
+    patch_open_view_once_ui(root / "submodules/TelegramUI/Sources/Chat/ChatControllerOpenViewOnceMediaMessage.swift")
+    patch_view_once_tooltip(root / "submodules/TelegramUI/Sources/ChatMessageContextControllerContentSource.swift")
     print("Ayu view-once preserve patch applied")
     return 0
 
