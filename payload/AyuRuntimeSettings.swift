@@ -9,6 +9,8 @@ public enum AyuRuntimeOption: Int32, CaseIterable {
     case hideOnline = 3
     case hideTyping = 4
     case automaticOffline = 5
+    // Kept only for settings migration. The 0.2 s send pulse is always enabled
+    // whenever Ghost + hide-online are enabled and is no longer user-configurable.
     case onlinePulseOnSend = 6
     case keepDeletedMessages = 7
     case showDeletedMarker = 8
@@ -58,6 +60,10 @@ public enum AyuRuntimeSettings {
     private static let deletedMarkerStyleKey = keyPrefix + "deleted.markerStyle"
     private static let deletedMarkerColorKey = keyPrefix + "deleted.markerColor"
     private static let maxDeletedMarkers = 20_000
+
+    /// Deleted messages in the ordinary chat are deliberately dimmed, while
+    /// the dedicated deleted-message viewer renders them at full opacity.
+    public static let deletedMessageAlpha: Float = 0.5
 
     private static func key(_ option: AyuRuntimeOption) -> String {
         switch option {
@@ -131,7 +137,7 @@ public enum AyuRuntimeSettings {
             hideOnline: storedValue(.hideOnline, defaults: defaults),
             hideTyping: storedValue(.hideTyping, defaults: defaults),
             automaticOffline: storedValue(.automaticOffline, defaults: defaults),
-            onlinePulseOnSend: storedValue(.onlinePulseOnSend, defaults: defaults),
+            onlinePulseOnSend: true,
             keepDeletedMessages: storedValue(.keepDeletedMessages, defaults: defaults),
             showDeletedMarker: storedValue(.showDeletedMarker, defaults: defaults),
             deletedMarkerStyle: style,
@@ -149,6 +155,10 @@ public enum AyuRuntimeSettings {
 
     private static let state = Atomic<AyuRuntimeSnapshot>(value: loadSnapshot())
     private static let deletedState = Atomic<AyuDeletedState>(value: loadDeletedState())
+
+    /// A one-operation bypass for the explicit "Прочитать" context-menu action.
+    /// This is a set, not a timer/poller: the next peer read synchronization consumes it.
+    private static let manualReadPeers = Atomic<Set<Int64>>(value: Set())
 
     public static var snapshot: AyuRuntimeSnapshot {
         return state.with { $0 }
@@ -170,7 +180,7 @@ public enum AyuRuntimeSettings {
         case .automaticOffline:
             return current.automaticOffline
         case .onlinePulseOnSend:
-            return current.onlinePulseOnSend
+            return true
         case .keepDeletedMessages:
             return current.keepDeletedMessages
         case .showDeletedMarker:
@@ -179,6 +189,10 @@ public enum AyuRuntimeSettings {
     }
 
     public static func set(_ option: AyuRuntimeOption, value: Bool) {
+        // The send pulse is intentionally permanent now. Ignore old callers/key values.
+        if option == .onlinePulseOnSend {
+            return
+        }
         UserDefaults.standard.set(value, forKey: key(option))
         _ = state.modify { current in
             var current = current
@@ -196,12 +210,13 @@ public enum AyuRuntimeSettings {
             case .automaticOffline:
                 current.automaticOffline = value
             case .onlinePulseOnSend:
-                current.onlinePulseOnSend = value
+                break
             case .keepDeletedMessages:
                 current.keepDeletedMessages = value
             case .showDeletedMarker:
                 current.showDeletedMarker = value
             }
+            current.onlinePulseOnSend = true
             return current
         }
     }
@@ -230,6 +245,33 @@ public enum AyuRuntimeSettings {
         return state.with { $0.master && $0.hideReadMessages }
     }
 
+    /// Used by the read-sync layer so only the explicit manual-read operation can pass.
+    public static func shouldSuppressRead(peerId: PeerId) -> Bool {
+        guard suppressReadMessages else {
+            return false
+        }
+        let key = peerId.toInt64()
+        return manualReadPeers.with { !$0.contains(key) }
+    }
+
+    public static func allowNextRead(peerId: PeerId) {
+        let key = peerId.toInt64()
+        _ = manualReadPeers.modify { current in
+            var current = current
+            current.insert(key)
+            return current
+        }
+    }
+
+    public static func consumeManualReadAllowance(peerId: PeerId) {
+        let key = peerId.toInt64()
+        _ = manualReadPeers.modify { current in
+            var current = current
+            current.remove(key)
+            return current
+        }
+    }
+
     public static var suppressStoryViews: Bool {
         return state.with { $0.master && $0.hideReadStories }
     }
@@ -247,7 +289,8 @@ public enum AyuRuntimeSettings {
     }
 
     public static var shouldPulseOnlineOnSend: Bool {
-        return state.with { $0.master && $0.hideOnline && $0.onlinePulseOnSend }
+        // Always enabled when Ghost is actively hiding online status.
+        return state.with { $0.master && $0.hideOnline }
     }
 
     public static var keepDeletedMessages: Bool {
@@ -260,6 +303,10 @@ public enum AyuRuntimeSettings {
 
     private static func fullKey(_ id: MessageId) -> String {
         return "\(id.peerId.namespace):\(id.peerId.id._internalGetInt64Value()):\(id.namespace):\(id.id)"
+    }
+
+    private static func peerFullKeyPrefix(_ peerId: PeerId) -> String {
+        return "\(peerId.namespace):\(peerId.id._internalGetInt64Value()):"
     }
 
     private static func persistDeletedState(_ value: AyuDeletedState) {
@@ -284,6 +331,7 @@ public enum AyuRuntimeSettings {
             updated = current
             return current
         }
+        // Atomic is already updated before persistence, so lookups see the deletion immediately.
         if let updated {
             persistDeletedState(updated)
         }
@@ -310,12 +358,61 @@ public enum AyuRuntimeSettings {
         }
     }
 
+    /// Promotes a non-channel global deletion to a peer-qualified id as soon as the
+    /// message is rendered. This makes per-chat clearing/viewing deterministic.
+    public static func registerDeletedMessageId(_ id: MessageId) {
+        guard isDeleted(id) else {
+            return
+        }
+        let key = fullKey(id)
+        var updated: AyuDeletedState?
+        _ = deletedState.modify { current in
+            if current.fullIds.contains(key) {
+                return current
+            }
+            var current = current
+            current.fullIds.insert(key)
+            if current.fullIds.count > maxDeletedMarkers {
+                current.fullIds = Set(current.fullIds.prefix(maxDeletedMarkers))
+            }
+            updated = current
+            return current
+        }
+        if let updated {
+            persistDeletedState(updated)
+        }
+    }
+
     public static func clearDeletedMarkers() {
         _ = deletedState.modify { _ in
             return AyuDeletedState(globalIds: Set(), fullIds: Set())
         }
         UserDefaults.standard.removeObject(forKey: deletedGlobalKey)
         UserDefaults.standard.removeObject(forKey: deletedFullKey)
+    }
+
+    /// Clears only deleted-message markers belonging to one chat.
+    public static func clearDeletedMarkers(peerId: PeerId) {
+        let prefix = peerFullKeyPrefix(peerId)
+        var updated: AyuDeletedState?
+        _ = deletedState.modify { current in
+            var current = current
+            let removedKeys = current.fullIds.filter { $0.hasPrefix(prefix) }
+            if removedKeys.isEmpty {
+                return current
+            }
+            current.fullIds.subtract(removedKeys)
+            for key in removedKeys {
+                if let rawId = key.split(separator: ":").last, let value = Int32(rawId) {
+                    current.globalIds.remove(value)
+                }
+            }
+            updated = current
+            return current
+        }
+        if let updated {
+            persistDeletedState(updated)
+        }
     }
 
     public static func isDeleted(_ id: MessageId) -> Bool {
@@ -373,6 +470,7 @@ public enum AyuRuntimeSettings {
         guard showDeletedMarker && isDeleted(messageId) else {
             return text
         }
+        registerDeletedMessageId(messageId)
         return "\(deletedMarkerPrefix) \(text)"
     }
 
