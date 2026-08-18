@@ -2,7 +2,7 @@ name: Ayu v0.3 PR Verify + IPA
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
