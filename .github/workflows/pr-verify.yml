@@ -87,6 +87,9 @@ jobs:
       - name: Apply real-time deleted message retention
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_realtime.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Fix one-shot manual read synchronization
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_manual_read_fix.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Create build configuration
         shell: bash
         run: |
