@@ -25,11 +25,13 @@ def main() -> None:
     require(telegram.exists(), "base verifier did not leave Telegram-iOS checkout")
 
     patchers = (
+        "apply_ayu_behavior_anchor_compat.py",
         "apply_ayu_behavior_hotfix.py",
         "apply_ayu_deleted_archive.py",
         "apply_ayu_files_visibility.py",
         "apply_ayu_deleted_visual_hotfix.py",
         "apply_ayu_presence_toggle_hotfix.py",
+        "apply_ayu_settings_categories.py",
     )
     for name in patchers:
         py_compile.compile(str(workspace / name), doraise=True)
@@ -40,6 +42,7 @@ def main() -> None:
     require("ayuReadMessageThroughGhost" in enqueue, "manual Read direct max-index helper missing")
     require("AYU_GHOST_PRESENCE_TOGGLE_v0_3" in enqueue, "immediate Ghost presence helper missing")
     require("ayuApplyGhostPresence" in enqueue, "Ghost presence request helper missing")
+    require("snapshot.master, AyuRuntimeSettings.snapshot.readOnActions" in enqueue, "send read-on-actions guard missing")
 
     menu = (telegram / "submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift").read_text(encoding="utf-8")
     require("ayuReadMessageThroughGhost(account: context.account" in menu, "manual Read action does not use direct helper")
@@ -49,6 +52,7 @@ def main() -> None:
     consume = (telegram / "submodules/TelegramCore/Sources/TelegramEngine/Messages/MarkMessageContentAsConsumedInteractively.swift").read_text(encoding="utf-8")
     require("public func ayuBurnViewOnceRemotely" in consume, "remote Burn helper missing")
     require("if AyuRuntimeSettings.shouldPreserveViewOnce(message: message)" in consume, "remote consume does not preserve local view-once")
+    require("snapshot.master && !AyuRuntimeSettings.snapshot.readOnActions" in consume, "media read-on-actions guard missing")
 
     manager = (telegram / "submodules/TelegramCore/Sources/State/AccountStateManager.swift").read_text(encoding="utf-8")
     require("LocalMessageTags(rawValue: 1 << 30)" in manager, "real-time deleted invalidation tag missing")
@@ -70,8 +74,20 @@ def main() -> None:
     runtime = (telegram / "submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift").read_text(encoding="utf-8")
     require("case telegram = 8" in runtime, "Telegram-theme deleted background option missing")
     require("AyuDeletedMarkerColor.telegram.rawValue" in runtime, "Telegram theme is not the deleted-background default")
+    require("case readOnActions = 9" in runtime, "read-on-actions option missing")
+    require("case useScheduled = 10" in runtime, "scheduled option missing")
+    require("readOnActions: storedValue(.readOnActions" in runtime, "read-on-actions default persistence missing")
 
     settings = (telegram / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift").read_text(encoding="utf-8")
+    require('title: .text("Настройки AyuGram")' in settings, "AyuGram settings title missing")
+    require('text: "КАТЕГОРИИ"' in settings, "categories header missing")
+    require('title: "Режим Призрака"' in settings, "Ghost category missing")
+    require('title: "Кастомизация"' in settings, "Customization category missing")
+    require('"Режим призрака \\(enabledCount)/5"' in settings, "Ghost 5/5 counter missing")
+    require('title: "Читать при действиях"' in settings, "read-on-actions toggle missing")
+    require('title: "Использовать отложку"' in settings, "scheduled toggle missing")
+    require("Зажмите любую опцию" not in settings, "pin-option description must not exist")
+    require("Отправлять без звука" not in settings, "silent-send setting must not exist")
     require('(.telegram, "Тема Telegram")' in settings, "Telegram-theme choice missing from settings")
     require("ayuApplyGhostPresence(account: context.account)" in settings, "Ghost toggle does not apply presence immediately")
 
