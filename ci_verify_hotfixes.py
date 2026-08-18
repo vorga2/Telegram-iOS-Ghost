@@ -135,7 +135,8 @@ def main() -> None:
     require("AyuRuntimeSettings.decorateTimestamp" in timestamp, "deleted marker/icon path missing")
 
     bubble = (telegram / "submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift").read_text(encoding="utf-8")
-    require("ayuUsesTelegramTheme" in bubble, "Telegram-theme deleted bubble path missing")
+    require("case .telegram:" in bubble and "ayuDeletedBackgroundColor = nil" in bubble, "Telegram-theme deleted bubble path missing")
+    require("ayuUsesTelegramTheme" not in bubble, "dead Telegram-theme flag returned")
 
     print("=== HOTFIX VERIFY SUCCESS ===", flush=True)
 
