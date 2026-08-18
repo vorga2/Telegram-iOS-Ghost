@@ -99,6 +99,9 @@ jobs:
       - name: Read current chat on send
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_send_read.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Apply behavior hotfixes
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_behavior_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Create build configuration
         shell: bash
         run: |
