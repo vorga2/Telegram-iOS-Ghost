@@ -14,7 +14,7 @@ def die(message: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Persist preserved incoming view-once media outside normal MediaBox cleanup")
+    parser = argparse.ArgumentParser(description="Persist and restore preserved incoming view-once media outside normal MediaBox cleanup")
     parser.add_argument("repo", nargs="?", default=".")
     args = parser.parse_args()
 
@@ -52,6 +52,35 @@ private func ayuViewOnceDurablePath(postbox: Postbox, resource: MediaResource) -
         .replacingOccurrences(of: "/", with: "_")
         .replacingOccurrences(of: ":", with: "_")
     return directory + "/" + safeId
+}
+
+private func ayuRestoreDurableViewOnceMedia(postbox: Postbox, message: Message) {
+    guard let resource = ayuViewOnceResource(message) else {
+        return
+    }
+    let durable = ayuViewOnceDurablePath(postbox: postbox, resource: resource)
+    guard FileManager.default.fileExists(atPath: durable) else {
+        return
+    }
+
+    let mediaPaths = postbox.mediaBox.storePathsForId(resource.id)
+    if FileManager.default.fileExists(atPath: mediaPaths.complete) {
+        return
+    }
+
+    let parent = (mediaPaths.complete as NSString).deletingLastPathComponent
+    let _ = try? FileManager.default.createDirectory(atPath: parent, withIntermediateDirectories: true)
+    let temp = mediaPaths.complete + ".ayu-restore-" + UUID().uuidString
+    do {
+        try FileManager.default.copyItem(atPath: durable, toPath: temp)
+        if FileManager.default.fileExists(atPath: mediaPaths.complete) {
+            try? FileManager.default.removeItem(atPath: temp)
+        } else {
+            try FileManager.default.moveItem(atPath: temp, toPath: mediaPaths.complete)
+        }
+    } catch {
+        try? FileManager.default.removeItem(atPath: temp)
+    }
 }
 
 private func ayuPersistViewOnceMedia(postbox: Postbox, message: Message) {
@@ -101,7 +130,7 @@ private func ayuRemoveDurableViewOnceMedia(postbox: Postbox, message: Message) {
     text = text.replace(function_anchor, helpers + function_anchor, 1)
 
     old = """            if AyuRuntimeSettings.shouldPreserveViewOnce(message: message) {\n                return\n            }\n            AyuRuntimeSettings.consumeViewOnceBurnAllowance(message.id)\n"""
-    new = """            if AyuRuntimeSettings.shouldPreserveViewOnce(message: message) {\n                ayuPersistViewOnceMedia(postbox: postbox, message: message)\n                return\n            }\n            // Reaching this branch for a preserved view-once item means the explicit\n            // manual Burn allowance was armed. Remove Ayu's durable copy and let\n            // Telegram's stock consume/destruction path continue unchanged.\n            ayuRemoveDurableViewOnceMedia(postbox: postbox, message: message)\n            AyuRuntimeSettings.consumeViewOnceBurnAllowance(message.id)\n"""
+    new = """            if AyuRuntimeSettings.shouldPreserveViewOnce(message: message) {\n                // Restore first if Telegram's normal MediaBox cache was cleaned,\n                // then refresh the durable copy once the stock resource is complete.\n                ayuRestoreDurableViewOnceMedia(postbox: postbox, message: message)\n                ayuPersistViewOnceMedia(postbox: postbox, message: message)\n                return\n            }\n            // Reaching this branch for a preserved view-once item means the explicit\n            // manual Burn allowance was armed. Remove Ayu's durable copy and let\n            // Telegram's stock consume/destruction path continue unchanged.\n            ayuRemoveDurableViewOnceMedia(postbox: postbox, message: message)\n            AyuRuntimeSettings.consumeViewOnceBurnAllowance(message.id)\n"""
 
     count = text.count(old)
     if count != 1:
