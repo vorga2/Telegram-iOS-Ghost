@@ -13,26 +13,32 @@ def die(message: str) -> None:
     raise SystemExit(1)
 
 
+def replace_once(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count != 1:
+        die(f"{label}: expected exactly once, found {count}")
+    return text.replace(old, new, 1)
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Read the current peer when sending while Ghost is active")
+    parser = argparse.ArgumentParser(description="Read the current peer on send and pulse online for explicit Read")
     parser.add_argument("repo", nargs="?", default=".")
     args = parser.parse_args()
 
     root = Path(args.repo).expanduser().resolve()
-    path = root / "submodules/TelegramCore/Sources/PendingMessages/EnqueueMessage.swift"
-    if not path.exists():
-        die(f"missing file: {path}")
+    enqueue_path = root / "submodules/TelegramCore/Sources/PendingMessages/EnqueueMessage.swift"
+    menu_path = root / "submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift"
+    for path in (enqueue_path, menu_path):
+        if not path.exists():
+            die(f"missing file: {path}")
 
-    text = path.read_text(encoding="utf-8")
-    if MARK in text:
-        print(f"[ayu-send-read] already patched: {path}")
-        return
+    text = enqueue_path.read_text(encoding="utf-8")
+    if MARK not in text:
+        anchor = "public func enqueueMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {\n    ayuSendOnlinePulse(account: account)\n"
+        if text.count(anchor) != 1:
+            die(f"enqueue anchor expected exactly once, found {text.count(anchor)}")
 
-    anchor = "public func enqueueMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {\n    ayuSendOnlinePulse(account: account)\n"
-    if text.count(anchor) != 1:
-        die(f"enqueue anchor expected exactly once, found {text.count(anchor)}")
-
-    helper = r'''
+        helper = r'''
 // AYU_SEND_READ_v0_3: sending is an explicit interaction, so while Ghost is on
 // we read the current peer even if passive read receipts are suppressed.
 // One Postbox transaction per send action; no timer, polling or history scan.
@@ -46,8 +52,6 @@ private func ayuReadPeerOnSend(account: Account, peerId: PeerId) {
             return
         }
 
-        // Reuse the same one-shot bypass as the explicit "Прочитать" action.
-        // The synchronization layer consumes it only when an actual push occurs.
         AyuRuntimeSettings.allowNextRead(peerId: peerId)
         _internal_applyMaxReadIndexInteractively(
             transaction: transaction,
@@ -58,10 +62,35 @@ private func ayuReadPeerOnSend(account: Account, peerId: PeerId) {
 }
 
 '''
+        replacement = helper + "public func enqueueMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {\n    ayuSendOnlinePulse(account: account)\n    ayuReadPeerOnSend(account: account, peerId: peerId)\n"
+        text = text.replace(anchor, replacement, 1)
 
-    replacement = helper + "public func enqueueMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {\n    ayuSendOnlinePulse(account: account)\n    ayuReadPeerOnSend(account: account, peerId: peerId)\n"
-    path.write_text(text.replace(anchor, replacement, 1), encoding="utf-8")
-    print(f"[ayu-send-read] patched: {path}")
+    # Export the existing 200 ms pulse helper so the explicit context-menu Read
+    # action can reuse exactly the same presence behavior as sending.
+    if "public func ayuGhostOnlinePulse(account: Account)" not in text:
+        text = replace_once(
+            text,
+            "private func ayuSendOnlinePulse(account: Account) {",
+            "public func ayuGhostOnlinePulse(account: Account) {",
+            "pulse helper visibility",
+        )
+        text = replace_once(
+            text,
+            "    ayuSendOnlinePulse(account: account)\n",
+            "    ayuGhostOnlinePulse(account: account)\n",
+            "send pulse call",
+        )
+
+    enqueue_path.write_text(text, encoding="utf-8")
+
+    menu = menu_path.read_text(encoding="utf-8")
+    if "AYU_MANUAL_READ_PULSE_v0_3" not in menu:
+        old = """                AyuRuntimeSettings.allowNextRead(peerId: ayuMessage.id.peerId)\n                let _ = context.engine.messages.applyMaxReadIndexInteractively(index: ayuMessage.index).startStandalone()\n"""
+        new = """                // AYU_MANUAL_READ_PULSE_v0_3: explicit Read briefly uses\n                // the same 200 ms online pulse as sending, then Ghost returns offline.\n                AyuRuntimeSettings.allowNextRead(peerId: ayuMessage.id.peerId)\n                ayuGhostOnlinePulse(account: context.account)\n                let _ = context.engine.messages.applyMaxReadIndexInteractively(index: ayuMessage.index).startStandalone()\n"""
+        menu = replace_once(menu, old, new, "manual Read action")
+        menu_path.write_text(menu, encoding="utf-8")
+
+    print("[ayu-send-read] current chat read + manual Read pulse patched")
 
 
 if __name__ == "__main__":
