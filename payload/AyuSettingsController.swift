@@ -6,21 +6,25 @@ import TelegramPresentationData
 import ItemListUI
 import AccountContext
 
+private final class AyuWeakControllerBox {
+    weak var value: ViewController?
+}
+
 private final class AyuSettingsControllerArguments {
     let updateBool: (AyuRuntimeOption, Bool) -> Void
-    let cycleDeletedStyle: () -> Void
-    let cycleDeletedColor: () -> Void
+    let selectDeletedStyle: () -> Void
+    let selectDeletedColor: () -> Void
     let clearDeleted: () -> Void
 
     init(
         updateBool: @escaping (AyuRuntimeOption, Bool) -> Void,
-        cycleDeletedStyle: @escaping () -> Void,
-        cycleDeletedColor: @escaping () -> Void,
+        selectDeletedStyle: @escaping () -> Void,
+        selectDeletedColor: @escaping () -> Void,
         clearDeleted: @escaping () -> Void
     ) {
         self.updateBool = updateBool
-        self.cycleDeletedStyle = cycleDeletedStyle
-        self.cycleDeletedColor = cycleDeletedColor
+        self.selectDeletedStyle = selectDeletedStyle
+        self.selectDeletedColor = selectDeletedColor
         self.clearDeleted = clearDeleted
     }
 }
@@ -37,7 +41,6 @@ private enum AyuSettingsEntry: ItemListNodeEntry {
     case stories(Bool)
     case online(Bool)
     case typing(Bool)
-    case pulse(Bool)
     case deletedHeader
     case keepDeleted(Bool)
     case showMarker(Bool)
@@ -47,7 +50,7 @@ private enum AyuSettingsEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .ghostHeader, .master, .read, .stories, .online, .typing, .pulse:
+        case .ghostHeader, .master, .read, .stories, .online, .typing:
             return AyuSettingsSection.ghost.rawValue
         case .deletedHeader, .keepDeleted, .showMarker, .markerStyle, .markerColor, .clearDeleted:
             return AyuSettingsSection.deleted.rawValue
@@ -62,7 +65,6 @@ private enum AyuSettingsEntry: ItemListNodeEntry {
         case .stories: return 3
         case .online: return 4
         case .typing: return 5
-        case .pulse: return 6
         case .deletedHeader: return 10
         case .keepDeleted: return 11
         case .showMarker: return 12
@@ -91,8 +93,6 @@ private enum AyuSettingsEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Скрывать онлайн", value: value, sectionId: self.section, style: .blocks, updated: { arguments.updateBool(.hideOnline, $0) })
         case let .typing(value):
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Скрывать «печатает…»", value: value, sectionId: self.section, style: .blocks, updated: { arguments.updateBool(.hideTyping, $0) })
-        case let .pulse(value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Онлайн на 0,2 с при отправке", value: value, sectionId: self.section, style: .blocks, updated: { arguments.updateBool(.onlinePulseOnSend, $0) })
         case .deletedHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "УДАЛЁННЫЕ СООБЩЕНИЯ", sectionId: self.section)
         case let .keepDeleted(value):
@@ -100,9 +100,9 @@ private enum AyuSettingsEntry: ItemListNodeEntry {
         case let .showMarker(value):
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Показывать метку удаления", value: value, sectionId: self.section, style: .blocks, updated: { arguments.updateBool(.showDeletedMarker, $0) })
         case let .markerStyle(value):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Стиль метки", label: value, sectionId: self.section, style: .blocks, action: { arguments.cycleDeletedStyle() })
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Метка удаления", label: value, sectionId: self.section, style: .blocks, action: { arguments.selectDeletedStyle() })
         case let .markerColor(value):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Цвет метки", label: value, sectionId: self.section, style: .blocks, action: { arguments.cycleDeletedColor() })
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Цвет метки", label: value, sectionId: self.section, style: .blocks, action: { arguments.selectDeletedColor() })
         case .clearDeleted:
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Очистить метки удалённых", label: "", sectionId: self.section, style: .blocks, action: { arguments.clearDeleted() })
         }
@@ -117,7 +117,6 @@ private func ayuSettingsEntries(_ snapshot: AyuRuntimeSnapshot) -> [AyuSettingsE
         .stories(snapshot.hideReadStories),
         .online(snapshot.hideOnline),
         .typing(snapshot.hideTyping),
-        .pulse(snapshot.onlinePulseOnSend),
         .deletedHeader,
         .keepDeleted(snapshot.keepDeletedMessages),
         .showMarker(snapshot.showDeletedMarker),
@@ -133,6 +132,73 @@ func ayuSettingsController(context: AccountContext) -> ViewController {
     let bump: () -> Void = {
         revisionValue &+= 1
         revision.set(revisionValue)
+    }
+    let controllerBox = AyuWeakControllerBox()
+
+    let presentStylePicker: () -> Void = {
+        guard let host = controllerBox.value else {
+            return
+        }
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let actionSheet = ActionSheetController(presentationData: presentationData)
+        let dismiss: () -> Void = { [weak actionSheet] in
+            actionSheet?.dismissAnimated()
+        }
+        let current = AyuDeletedMarkerStyle(rawValue: AyuRuntimeSettings.snapshot.deletedMarkerStyle) ?? .trash
+        let options: [(AyuDeletedMarkerStyle, String)] = [
+            (.trash, "🗑 Значок"),
+            (.text, "Удалено"),
+            (.cross, "✕ Крест"),
+            (.compact, "DEL")
+        ]
+        let items: [ActionSheetItem] = options.map { style, title in
+            let displayTitle = style == current ? "✓ \(title)" : title
+            return ActionSheetButtonItem(title: displayTitle, action: {
+                dismiss()
+                AyuRuntimeSettings.setDeletedMarkerStyle(style.rawValue)
+                bump()
+            })
+        }
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { dismiss() })
+            ])
+        ])
+        host.present(actionSheet, in: .window(.root))
+    }
+
+    let presentColorPicker: () -> Void = {
+        guard let host = controllerBox.value else {
+            return
+        }
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let actionSheet = ActionSheetController(presentationData: presentationData)
+        let dismiss: () -> Void = { [weak actionSheet] in
+            actionSheet?.dismissAnimated()
+        }
+        let current = AyuDeletedMarkerColor(rawValue: AyuRuntimeSettings.snapshot.deletedMarkerColor) ?? .red
+        let options: [(AyuDeletedMarkerColor, String)] = [
+            (.red, "🔴 Красный"),
+            (.orange, "🟠 Оранжевый"),
+            (.gray, "⚪️ Серый"),
+            (.purple, "🟣 Фиолетовый")
+        ]
+        let items: [ActionSheetItem] = options.map { color, title in
+            let displayTitle = color == current ? "✓ \(title)" : title
+            return ActionSheetButtonItem(title: displayTitle, action: {
+                dismiss()
+                AyuRuntimeSettings.setDeletedMarkerColor(color.rawValue)
+                bump()
+            })
+        }
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { dismiss() })
+            ])
+        ])
+        host.present(actionSheet, in: .window(.root))
     }
 
     let arguments = AyuSettingsControllerArguments(
@@ -150,16 +216,8 @@ func ayuSettingsController(context: AccountContext) -> ViewController {
             }
             bump()
         },
-        cycleDeletedStyle: {
-            let current = AyuRuntimeSettings.snapshot.deletedMarkerStyle
-            AyuRuntimeSettings.setDeletedMarkerStyle((current + 1) % 4)
-            bump()
-        },
-        cycleDeletedColor: {
-            let current = AyuRuntimeSettings.snapshot.deletedMarkerColor
-            AyuRuntimeSettings.setDeletedMarkerColor((current + 1) % 4)
-            bump()
-        },
+        selectDeletedStyle: presentStylePicker,
+        selectDeletedColor: presentColorPicker,
         clearDeleted: {
             AyuRuntimeSettings.clearDeletedMarkers()
             bump()
@@ -185,5 +243,7 @@ func ayuSettingsController(context: AccountContext) -> ViewController {
         return (controllerState, (listState, arguments))
     }
 
-    return ItemListController(context: context, state: signal)
+    let controller = ItemListController(context: context, state: signal)
+    controllerBox.value = controller
+    return controller
 }
