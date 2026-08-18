@@ -125,6 +125,9 @@ jobs:
       - name: Apply Spy settings
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_spy_settings.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Persist Spy edit history
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_spy_edit_history.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Create build configuration
         shell: bash
         run: |
