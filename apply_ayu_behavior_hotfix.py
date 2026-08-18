@@ -16,13 +16,14 @@ def main() -> int:
         return 2
     root = Path(sys.argv[1]).resolve()
 
-    # Manual Read: apply the selected MessageIndex directly in TelegramCore so
-    # the selected incoming item and all older items above it become read locally,
-    # then the existing one-shot Ghost allowance lets that max index sync.
+    # Manual Read: apply the selected MessageIndex locally, then send one exact
+    # Telegram read request for the selected max id. Ghost's ordinary background
+    # read-sync remains suppressed, so there is no stale one-shot allowance that
+    # could leak into a later automatic read.
     enqueue = root / "submodules/TelegramCore/Sources/PendingMessages/EnqueueMessage.swift"
     t = enqueue.read_text(encoding="utf-8")
     anchor = "public func enqueueMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {\n"
-    helper = '''// AYU_BEHAVIOR_HOTFIX_v0_3\npublic func ayuReadMessageThroughGhost(account: Account, index: MessageIndex) {\n    guard AyuRuntimeSettings.snapshot.master else { return }\n    AyuRuntimeSettings.allowNextRead(peerId: index.id.peerId)\n    let _ = account.postbox.transaction { transaction -> Void in\n        _internal_applyMaxReadIndexInteractively(transaction: transaction, stateManager: account.stateManager, index: index)\n    }.start()\n}\n\n'''
+    helper = '''// AYU_BEHAVIOR_HOTFIX_v0_3\n// AYU_MANUAL_READ_SERVER_v0_3\nprivate enum AyuManualReadTarget {\n    case cloud(Api.InputPeer)\n    case secret(Api.InputEncryptedChat)\n}\n\npublic func ayuReadMessageThroughGhost(account: Account, index: MessageIndex) {\n    guard AyuRuntimeSettings.snapshot.master else { return }\n\n    // Clear any allowance left by an older build. This explicit action no longer\n    // depends on the asynchronous PeerReadState synchronization race.\n    AyuRuntimeSettings.consumeManualReadAllowance(peerId: index.id.peerId)\n\n    let signal = account.postbox.transaction { transaction -> AyuManualReadTarget? in\n        // Telegram's own local read helper marks this message and every older\n        // incoming item up to the same MessageIndex as read.\n        _internal_applyMaxReadIndexInteractively(transaction: transaction, stateManager: account.stateManager, index: index)\n\n        guard let peer = transaction.getPeer(index.id.peerId) else {\n            return nil\n        }\n        if index.id.peerId.namespace == Namespaces.Peer.SecretChat {\n            if let input = apiInputSecretChat(peer) {\n                return .secret(input)\n            }\n        } else if let input = apiInputPeer(peer) {\n            return .cloud(input)\n        }\n        return nil\n    }\n    |> mapToSignal { target -> Signal<Void, NoError> in\n        guard let target else {\n            return .complete()\n        }\n\n        switch target {\n        case let .secret(input):\n            return account.network.request(Api.functions.messages.readEncryptedHistory(peer: input, maxDate: index.timestamp))\n            |> `catch` { _ -> Signal<Api.Bool, NoError> in\n                return .complete()\n            }\n            |> mapToSignal { _ -> Signal<Void, NoError> in\n                return .complete()\n            }\n\n        case let .cloud(input):\n            switch input {\n            case let .inputPeerChannel(data):\n                return account.network.request(Api.functions.channels.readHistory(channel: Api.InputChannel.inputChannel(.init(channelId: data.channelId, accessHash: data.accessHash)), maxId: index.id.id))\n                |> `catch` { _ -> Signal<Api.Bool, NoError> in\n                    return .complete()\n                }\n                |> mapToSignal { _ -> Signal<Void, NoError> in\n                    return .complete()\n                }\n\n            default:\n                return account.network.request(Api.functions.messages.readHistory(peer: input, maxId: index.id.id))\n                |> map(Optional.init)\n                |> `catch` { _ -> Signal<Api.messages.AffectedMessages?, NoError> in\n                    return .single(nil)\n                }\n                |> mapToSignal { result -> Signal<Void, NoError> in\n                    if let result {\n                        switch result {\n                        case let .affectedMessages(data):\n                            account.stateManager.addUpdateGroups([.updatePts(pts: data.pts, ptsCount: data.ptsCount)])\n                        }\n                    }\n                    return .complete()\n                }\n            }\n        }\n    }\n\n    let _ = signal.startStandalone()\n}\n\n'''
     if "AYU_BEHAVIOR_HOTFIX_v0_3" not in t:
         t = one(t, anchor, helper + anchor, "read helper")
     enqueue.write_text(t, encoding="utf-8")
@@ -109,7 +110,7 @@ def main() -> int:
         t = one(t, old_tags, new_tags, "deleted realtime local tag")
     manager.write_text(t, encoding="utf-8")
 
-    print("[ayu-behavior-hotfix] emoji markers + persistent Burn flame/menu state + read/realtime fixes patched")
+    print("[ayu-behavior-hotfix] emoji markers + persistent Burn flame/menu state + direct manual-read server push + realtime fixes patched")
     return 0
 
 
