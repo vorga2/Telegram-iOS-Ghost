@@ -34,6 +34,7 @@ def main() -> None:
         "apply_ayu_settings_categories.py",
         "apply_ayu_spy_settings.py",
         "apply_ayu_spy_edit_history.py",
+        "apply_ayu_spy_read_dates.py",
     )
     for name in patchers:
         py_compile.compile(str(workspace / name), doraise=True)
@@ -65,6 +66,7 @@ def main() -> None:
     require("AyuRuntimeSettings.snapshot.saveEditHistory" in manager, "Spy edit-history toggle not enforced")
     require("case .updateEditMessage, .updateEditChannelMessage" in manager, "remote edit updates are not intercepted")
     require("transaction.getMessage(id)" in manager and "enqueueEdit(message: currentMessage)" in manager, "previous revision is not captured before replacement")
+    require("self.ayuRefreshPreservedDeletedMessages(updates)" in manager, "edit-history integration dropped deleted realtime hook")
     require("        let root = documents\n" in manager, "archive must use exposed Documents root")
     require('documents.appendingPathComponent("AyuGram"' not in manager, "nested AyuGram/AyuGram archive layer returned")
     require('appendingPathComponent("Downloads"' not in manager, "obsolete Documents/Downloads archive layer returned")
@@ -73,6 +75,15 @@ def main() -> None:
     require("CREATE TABLE IF NOT EXISTS deleted_messages" in manager, "deleted-message database schema missing")
     require("CREATE TABLE IF NOT EXISTS attachments" in manager, "attachment database schema missing")
     require("resourceData(attachment.resource)" in manager and "take(1)" in manager, "attachment archival must be one-shot, not a long-lived watcher")
+
+    state_utils = (telegram / "submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift").read_text(encoding="utf-8")
+    require("AYU_SPY_READ_DATES_v0_3" in state_utils, "Spy read-date hook missing")
+    require("CREATE TABLE IF NOT EXISTS read_receipts" in state_utils, "Spy read-date table missing")
+    require("read_receipts_lookup_idx" in state_utils, "Spy read-date lookup index missing")
+    require("AyuRuntimeSettings.snapshot.saveReadDates" in state_utils, "Spy read-date toggle not enforced")
+    require("case let .updateReadHistoryOutbox" in state_utils, "outgoing read update hook missing")
+    require("peerId.namespace != Namespaces.Peer.CloudChannel" in state_utils, "channels are not excluded from local read dates")
+    require("INSERT OR IGNORE INTO read_receipts" in state_utils, "local read max-boundary persistence missing")
 
     plist = (telegram / "Telegram/Telegram-iOS/InfoBazel.plist").read_text(encoding="utf-8")
     require("<string>AyuGram</string>" in plist, "AyuGram Files folder/display name missing")
