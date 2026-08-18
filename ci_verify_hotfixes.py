@@ -36,6 +36,8 @@ def main() -> None:
         "apply_ayu_spy_edit_history.py",
         "apply_ayu_spy_read_dates.py",
         "apply_ayu_spy_details.py",
+        "apply_ayu_spy_content_read_dates.py",
+        "apply_ayu_customization_finish.py",
     )
     for name in patchers:
         py_compile.compile(str(workspace / name), doraise=True)
@@ -56,6 +58,7 @@ def main() -> None:
     require('text: "Детали"' in menu, "Details action missing")
     require('text: "Назад"' in menu and "controller?.popItems()" in menu, "nested Details Back action missing")
     require("controller.pushItems" in menu, "Details must use nested context menu")
+    require("effectiveContentReadAt" in menu, "voice/round content-read timestamp missing from Details")
 
     consume = (telegram / "submodules/TelegramCore/Sources/TelegramEngine/Messages/MarkMessageContentAsConsumedInteractively.swift").read_text(encoding="utf-8")
     require("public func ayuBurnViewOnceRemotely" in consume, "remote Burn helper missing")
@@ -68,6 +71,7 @@ def main() -> None:
     require("AYU_SPY_EDIT_HISTORY_v0_3" in manager, "Spy edit-history hook missing")
     require("AYU_SPY_DETAILS_v0_3" in manager, "Spy stored Details helper missing")
     require("ayuSpyStoredMessageDetails" in manager, "Spy DB Details lookup missing")
+    require("localContentReadAt" in manager, "stored content-read fallback missing")
     require("CREATE TABLE IF NOT EXISTS edit_history" in manager, "Spy edit-history table missing")
     require("edit_history_message_idx" in manager, "Spy edit-history index missing")
     require("AyuRuntimeSettings.snapshot.saveEditHistory" in manager, "Spy edit-history toggle not enforced")
@@ -92,6 +96,9 @@ def main() -> None:
     require("peerId.namespace != Namespaces.Peer.CloudChannel" in state_utils, "channels are not excluded from local read dates")
     require("INSERT OR IGNORE INTO read_receipts" in state_utils, "local read max-boundary persistence missing")
     require('appendingPathComponent("AyuGram"' not in state_utils, "read-date DB must use exposed Documents root")
+    require("AYU_SPY_CONTENT_READ_DATES_v0_3" in state_utils, "content-read hook missing")
+    require("CREATE TABLE IF NOT EXISTS content_read_receipts" in state_utils, "content-read table missing")
+    require("INSERT OR IGNORE INTO content_read_receipts" in state_utils, "first content-read timestamp persistence missing")
 
     database = (telegram / "submodules/Postbox/Sources/Database.swift").read_text(encoding="utf-8")
     require("AYU_SPY_QUERY_ROWS_v0_3" in database and "public func queryRows" in database, "Ayu SQLite query helper missing")
@@ -108,9 +115,11 @@ def main() -> None:
     require("case useScheduled = 10" in runtime, "scheduled option missing")
     require("case saveEditHistory = 11" in runtime, "Spy edit-history option missing")
     require("case saveReadDates = 12" in runtime, "Spy read-date option missing")
+    require("case translucentDeleted = 13" in runtime, "translucent-deleted option missing")
     require("readOnActions: storedValue(.readOnActions" in runtime, "read-on-actions default persistence missing")
     require("saveEditHistory: storedValue(.saveEditHistory" in runtime, "Spy edit-history persistence missing")
     require("saveReadDates: storedValue(.saveReadDates" in runtime, "Spy read-date persistence missing")
+    require("translucentDeleted: storedValue(.translucentDeleted" in runtime, "translucent-deleted default persistence missing")
 
     settings = (telegram / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift").read_text(encoding="utf-8")
     require('title: .text("Настройки AyuGram")' in settings, "AyuGram settings title missing")
@@ -126,6 +135,9 @@ def main() -> None:
     require('"Режим призрака \\(enabledCount)/5"' in settings, "Ghost 5/5 counter missing")
     require('title: "Читать при действиях"' in settings, "read-on-actions toggle missing")
     require('title: "Использовать отложку"' in settings, "scheduled toggle missing")
+    require('title: "Полупрозрачные удаленки"' in settings, "translucent-deleted customization toggle missing")
+    require('(.text, " "), (.trash, "👀"), (.cross, "❌")' in settings, "marker picker is not icon-only")
+    require('let ayuMarkerPreview = snapshot.showDeletedMarker ? AyuRuntimeSettings.deletedMarkerPrefix : ""' in settings, "marker preview must become blank when disabled")
     require("Зажмите любую опцию" not in settings, "pin-option description must not exist")
     require("Отправлять без звука" not in settings, "silent-send setting must not exist")
     require('(.telegram, "Тема Telegram")' in settings, "Telegram-theme choice missing from settings")
@@ -136,6 +148,9 @@ def main() -> None:
 
     bubble = (telegram / "submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift").read_text(encoding="utf-8")
     require("ayuUsesTelegramTheme" in bubble, "Telegram-theme deleted bubble path missing")
+
+    message_item = (telegram / "submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageItemImpl.swift").read_text(encoding="utf-8")
+    require("snapshot.translucentDeleted && AyuRuntimeSettings.isDeleted" in message_item, "whole-message alpha is not controlled by customization toggle")
 
     print("=== HOTFIX VERIFY SUCCESS ===", flush=True)
 
