@@ -30,6 +30,7 @@ def main() -> None:
         "apply_ayu_deleted_archive.py",
         "apply_ayu_files_visibility.py",
         "apply_ayu_deleted_visual_hotfix.py",
+        "apply_ayu_deleted_visual_compile_fix.py",
         "apply_ayu_presence_toggle_hotfix.py",
         "apply_ayu_settings_categories.py",
         "apply_ayu_spy_settings.py",
@@ -45,7 +46,10 @@ def main() -> None:
 
     enqueue = (telegram / "submodules/TelegramCore/Sources/PendingMessages/EnqueueMessage.swift").read_text(encoding="utf-8")
     require("AYU_BEHAVIOR_HOTFIX_v0_3" in enqueue, "manual Read behavior hotfix missing")
+    require("AYU_MANUAL_READ_SERVER_v0_3" in enqueue, "manual Read direct server push missing")
     require("ayuReadMessageThroughGhost" in enqueue, "manual Read direct max-index helper missing")
+    require("Api.functions.messages.readHistory" in enqueue, "manual Read messages.readHistory request missing")
+    require("Api.functions.channels.readHistory" in enqueue, "manual Read channels.readHistory request missing")
     require("AYU_GHOST_PRESENCE_TOGGLE_v0_3" in enqueue, "immediate Ghost presence helper missing")
     require("ayuApplyGhostPresence" in enqueue, "Ghost presence request helper missing")
     require("snapshot.master, AyuRuntimeSettings.snapshot.readOnActions" in enqueue, "send read-on-actions guard missing")
@@ -147,7 +151,8 @@ def main() -> None:
     require("AyuRuntimeSettings.decorateTimestamp" in timestamp, "deleted marker/icon path missing")
 
     bubble = (telegram / "submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift").read_text(encoding="utf-8")
-    require("ayuUsesTelegramTheme" in bubble, "Telegram-theme deleted bubble path missing")
+    require("AYU_DELETED_VISUAL_COMPILE_FIX_v0_3" in bubble, "deleted visual compile fix missing")
+    require("ayuUsesTelegramTheme" not in bubble, "dead ayuUsesTelegramTheme flag still present")
 
     message_item = (telegram / "submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageItemImpl.swift").read_text(encoding="utf-8")
     require("snapshot.translucentDeleted && AyuRuntimeSettings.isDeleted" in message_item, "whole-message alpha is not controlled by customization toggle")
