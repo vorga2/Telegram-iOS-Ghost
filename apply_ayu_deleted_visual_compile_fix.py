@@ -24,7 +24,7 @@ def main() -> int:
 
     text = text.replace(
         old_decl,
-        "        // AYU_DELETED_VISUAL_COMPILE_FIX_v0_3\n        let ayuDeletedBackgroundColor: UIColor?\n",
+        "        // AYU_DELETED_VISUAL_COMPILE_FIX_v0_3: removed dead ayuUsesTelegramTheme flag\n        let ayuDeletedBackgroundColor: UIColor?\n",
         1,
     )
 
@@ -39,8 +39,8 @@ def main() -> int:
     ):
         text = text.replace(line, "")
 
-    if "ayuUsesTelegramTheme" in text:
-        raise RuntimeError("deleted visual compile fix: stale ayuUsesTelegramTheme reference remains")
+    if "let ayuUsesTelegramTheme" in text or "ayuUsesTelegramTheme =" in text:
+        raise RuntimeError("deleted visual compile fix: stale ayuUsesTelegramTheme code remains")
 
     path.write_text(text, encoding="utf-8")
     print("[ayu-deleted-visual-compile-fix] removed dead Telegram-theme flag")
