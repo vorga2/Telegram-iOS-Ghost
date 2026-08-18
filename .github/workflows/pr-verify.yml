@@ -102,6 +102,12 @@ jobs:
       - name: Apply behavior hotfixes
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_behavior_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Restore deleted marker and Telegram-theme background default
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_visual_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply Ghost presence immediately on toggle
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_presence_toggle_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Create build configuration
         shell: bash
         run: |
