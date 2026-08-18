@@ -81,11 +81,9 @@ private final class AyuDeletedArchive {
             return nil
         }
 
-        // iOS apps cannot silently write to the user's global Files/iCloud
-        // Downloads directory. Keep the exact requested layout inside the app's
-        // Documents sandbox so it is safe, persistent and exportable later.
-        let root = documents.appendingPathComponent("Downloads", isDirectory: true)
-            .appendingPathComponent("AyuGram", isDirectory: true)
+        // Keep the Ayu archive directly under the app's Documents directory so
+        // Files shows a simple Documents/AyuGram layout without an extra Downloads layer.
+        let root = documents.appendingPathComponent("AyuGram", isDirectory: true)
         let deleted = root.appendingPathComponent("Deleted", isDirectory: true)
         let saved = root.appendingPathComponent("Saved attachments", isDirectory: true)
         let photos = saved.appendingPathComponent("Photos", isDirectory: true)
@@ -209,7 +207,7 @@ private final class AyuDeletedArchive {
     text = one(text, loop_anchor, loop_new, "deleted archive event hook")
 
     path.write_text(text, encoding="utf-8")
-    print("[ayu-deleted-archive] Downloads/AyuGram archive + SQLite metadata installed")
+    print("[ayu-deleted-archive] Documents/AyuGram archive + SQLite metadata installed")
     return 0
 
 
