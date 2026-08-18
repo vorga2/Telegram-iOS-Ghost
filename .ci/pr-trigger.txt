@@ -1,0 +1,2 @@
+Trigger Verify Ayu Patch v0.3 via pull_request event.
+Retry after reusable Verify → IPA pipeline update.
