@@ -75,6 +75,9 @@ jobs:
       - name: Apply Ayu profile cache
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_profile_cache.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Apply Ayu view-once preservation
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_view_once.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Create build configuration
         shell: bash
         run: |
