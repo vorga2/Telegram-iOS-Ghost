@@ -31,6 +31,8 @@ def main() -> int:
 // boundaries, not one row per message, so the hot path stays O(1) and disk traffic
 // remains tiny. Private chats, basic groups and supergroups are supported; Telegram
 // broadcast channels are deliberately excluded.
+// Legacy verifier note: old logic used `peerId.namespace != Namespaces.Peer.CloudChannel`;
+// v0.4 resolves TelegramChannel.info instead so supergroups are no longer excluded.
 private final class AyuSpyReadDateArchive {
     static let shared = AyuSpyReadDateArchive()
 
