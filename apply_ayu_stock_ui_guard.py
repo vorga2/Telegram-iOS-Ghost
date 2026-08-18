@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -17,6 +18,19 @@ def restore_stock(path: Path, verifier_comments: str) -> None:
     # stays byte-for-byte stock Telegram apart from these comments.
     path.write_text(stock.rstrip() + "\n\n" + verifier_comments.rstrip() + "\n", encoding="utf-8")
     print(f"[ayu-stock-ui] restored stock runtime code: {path}")
+
+
+def restore_head_file(root: Path, relative: str) -> None:
+    """Restore a fragile stock UI source directly from the pinned Telegram HEAD.
+
+    These files are not Ayu extension points. Keeping them exact-upstream prevents
+    accidental broad patch interactions from breaking pinned/reply/gift UI and
+    adds zero runtime overhead.
+    """
+    data = subprocess.check_output(["git", "show", f"HEAD:{relative}"], cwd=root)
+    path = root / relative
+    path.write_bytes(data)
+    print(f"[ayu-stock-ui] restored pinned upstream file: {relative}")
 
 
 def main() -> int:
@@ -49,7 +63,17 @@ def main() -> int:
         f"// {MARK}: stock message-item renderer preserved; no whole-item deleted alpha.",
     )
 
-    print("[ayu-stock-ui] message item + outgoing timestamps/date/status paths are stock Telegram")
+    # These UI surfaces must remain exact Telegram. Ayu does not need to patch
+    # them at all; restoring from the pinned HEAD is the safest fix and costs
+    # nothing at runtime.
+    for relative in (
+        "submodules/TelegramUI/Components/Chat/ChatMessageReplyInfoNode/Sources/ChatMessageReplyInfoNode.swift",
+        "submodules/TelegramUI/Sources/ChatPinnedMessageTitlePanelNode.swift",
+        "submodules/TelegramUI/Components/PeerInfo/PeerInfoVisualMediaPaneNode/Sources/PeerInfoGiftsPaneNode.swift",
+    ):
+        restore_head_file(root, relative)
+
+    print("[ayu-stock-ui] stock reply + pinned + gifts UI preserved")
     return 0
 
 
