@@ -186,7 +186,7 @@ private func ayuSpySettingsController(context: AccountContext) -> ViewController
         text = one(
             text,
             "    let arguments = AyuMainArguments(openGhost: { [weak controllerBox] in\n        controllerBox?.value?.push(ayuGhostSettingsController(context: context))\n    }, openCustomization: { [weak controllerBox] in\n        controllerBox?.value?.push(ayuCustomizationController(context: context))\n    })",
-            "    let arguments = AyuMainArguments(openGhost: { [weak controllerBox] in\n        controllerBox?.value?.push(ayuGhostSettingsController(context: context))\n    }, openCustomization: { [weak controllerBox] in\n        controllerBox?.value?.push(ayuCustomizationController(context: context))\n    }, openSpy: { [weak controllerBox] in\n        controllerBox?.value?.push(ayuSpySettingsController(context: context))\n    })",
+            "    // AYU_SETTINGS_NAVIGATION_FIX_v0_3: AyuWeakControllerBox already keeps\n    // the controller weakly, so the actions must retain the box itself.\n    let arguments = AyuMainArguments(openGhost: {\n        controllerBox.value?.push(ayuGhostSettingsController(context: context))\n    }, openCustomization: {\n        controllerBox.value?.push(ayuCustomizationController(context: context))\n    }, openSpy: {\n        controllerBox.value?.push(ayuSpySettingsController(context: context))\n    })",
             "main spy navigation",
         )
         text = one(
@@ -197,7 +197,7 @@ private func ayuSpySettingsController(context: AccountContext) -> ViewController
         )
     settings.write_text(text, encoding="utf-8")
 
-    print("[ayu-spy-settings] Spy category + deleted/edit/read-date toggles installed")
+    print("[ayu-spy-settings] Spy category + deleted/edit/read-date toggles + category navigation lifetime fixed")
     return 0
 
 
