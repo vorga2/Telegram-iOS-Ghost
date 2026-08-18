@@ -69,8 +69,8 @@ jobs:
             telegram-ios-bazel-v030-macos26-xcode262-${{ steps.telegram-source.outputs.ref }}-
             telegram-ios-bazel-v025-macos26-xcode262-${{ steps.telegram-source.outputs.ref }}-
 
-      - name: Apply Ayu v0.3 crash-fixed patcher
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_v03_crashfix.py" "$RUNNER_TEMP/Telegram-iOS"
+      - name: Apply Ayu v0.3 UI v2 patcher
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_v03_ui_v2.py" "$RUNNER_TEMP/Telegram-iOS"
 
       - name: Apply Ayu profile cache
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_profile_cache.py" "$RUNNER_TEMP/Telegram-iOS"
