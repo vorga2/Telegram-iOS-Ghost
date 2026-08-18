@@ -84,6 +84,9 @@ jobs:
       - name: Apply deleted bubble background
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_background.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Apply real-time deleted message retention
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_realtime.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Create build configuration
         shell: bash
         run: |
