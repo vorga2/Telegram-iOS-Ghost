@@ -66,7 +66,7 @@ final class AyuDeletedMessagesChatContents: ChatCustomContentsProtocol {
                 })
                 let entries = messages.map { message in
                     return EngineRawMessageHistoryEntry(
-                        message: message,
+                        message: message._asMessage(),
                         isRead: true,
                         location: nil,
                         monthLocation: nil,
@@ -163,9 +163,7 @@ func ayuDeletedMessagesController(context: AccountContext, peerId: PeerId) -> Vi
         mode: .standard(.default),
         params: nil
     )
-    guard let viewController = controller as? ViewController else {
-        return nil
-    }
+    let viewController: ViewController = controller
     viewController.title = "Удалёнки"
     return viewController
 }
