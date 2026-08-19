@@ -4,6 +4,7 @@ import sys
 
 MARK = "AYU_SPY_DETAILS_v0_3"
 DB_MARK = "AYU_SPY_QUERY_ROWS_v0_3"
+FINAL_UI_MARK = "AYU_FINAL_UI_REALTIME_FIX_v0_3"
 
 
 def one(text: str, old: str, new: str, label: str) -> str:
@@ -89,6 +90,29 @@ public func ayuSpyStoredMessageDetails(_ messageId: MessageId) -> AyuSpyStoredMe
 
 '''
         text = one(text, anchor, helper + anchor, "stored Details helper")
+
+    # AYU_FINAL_UI_REALTIME_FIX_v0_3: the raw delete path previously re-stored an
+    # identical StoreMessage. Postbox is allowed to coalesce that write, leaving an
+    # already-visible bubble with its old non-deleted layout until some unrelated
+    # relayout occurs. Toggle the same private local-tag bit used by the final-state
+    # invalidation so every incoming delete produces a real history-view update.
+    if FINAL_UI_MARK not in text:
+        raw_start = text.find("        private func ayuRefreshPreservedDeletedMessages(_ updates: Api.Updates) {")
+        raw_end = text.find("        private func ayuRefreshPreservedDeletedEventIds(_ deletedIds: [DeletedMessageId]) {", raw_start)
+        if raw_start < 0 or raw_end < 0:
+            raise RuntimeError("realtime deleted raw/final function anchors missing")
+        raw = text[raw_start:raw_end]
+        return_anchor = "                        return .update(StoreMessage(\n"
+        if raw.count(return_anchor) != 1:
+            raise RuntimeError(f"raw deleted StoreMessage anchor expected 1, found {raw.count(return_anchor)}")
+        refresh = """                        // AYU_FINAL_UI_REALTIME_FIX_v0_3\n                        let ayuRealtimeRefreshTag = LocalMessageTags(rawValue: 1 << 29)\n                        var ayuRealtimeLocalTags = currentMessage.localTags\n                        if ayuRealtimeLocalTags.contains(ayuRealtimeRefreshTag) {\n                            ayuRealtimeLocalTags.remove(ayuRealtimeRefreshTag)\n                        } else {\n                            ayuRealtimeLocalTags.insert(ayuRealtimeRefreshTag)\n                        }\n                        return .update(StoreMessage(\n"""
+        raw = raw.replace(return_anchor, refresh, 1)
+        local_tags_anchor = "                            localTags: currentMessage.localTags,\n"
+        if raw.count(local_tags_anchor) != 1:
+            raise RuntimeError(f"raw deleted localTags anchor expected 1, found {raw.count(local_tags_anchor)}")
+        raw = raw.replace(local_tags_anchor, "                            localTags: ayuRealtimeLocalTags,\n", 1)
+        text = text[:raw_start] + raw + text[raw_end:]
+
     manager_path.write_text(text, encoding="utf-8")
 
     # Read-date writer must point to the same exposed Documents/Deleted database.
@@ -236,7 +260,21 @@ private func ayuDetailsMenuItems(message: EngineRawMessage, stored: AyuSpyStored
         text = one(text, return_anchor, details_action + return_anchor, "Details context action")
     menu_path.write_text(text, encoding="utf-8")
 
-    print("[ayu-spy-details] nested Details context menu + DB fallback + root storage normalization installed")
+    # The category controller used weak captures of a local controllerBox. Nothing
+    # retained that box after ayuSettingsController returned, so every category tap
+    # became a no-op. Keep the box strongly in the action closures; the box itself
+    # only holds a weak ViewController, so this does not create a retain cycle.
+    settings_path = root / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift"
+    text = settings_path.read_text(encoding="utf-8")
+    weak_navigation = '''    let arguments = AyuMainArguments(openGhost: { [weak controllerBox] in\n        controllerBox?.value?.push(ayuGhostSettingsController(context: context))\n    }, openCustomization: { [weak controllerBox] in\n        controllerBox?.value?.push(ayuCustomizationController(context: context))\n    }, openSpy: { [weak controllerBox] in\n        controllerBox?.value?.push(ayuSpySettingsController(context: context))\n    })'''
+    strong_navigation = '''    let arguments = AyuMainArguments(openGhost: { [controllerBox] in\n        controllerBox.value?.push(ayuGhostSettingsController(context: context))\n    }, openCustomization: { [controllerBox] in\n        controllerBox.value?.push(ayuCustomizationController(context: context))\n    }, openSpy: { [controllerBox] in\n        controllerBox.value?.push(ayuSpySettingsController(context: context))\n    })'''
+    if weak_navigation in text:
+        text = text.replace(weak_navigation, strong_navigation, 1)
+    elif strong_navigation not in text:
+        raise RuntimeError("Ayu main category navigation anchor missing")
+    settings_path.write_text(text, encoding="utf-8")
+
+    print("[ayu-spy-details] nested Details + category navigation + instant deleted relayout installed")
     return 0
 
 
