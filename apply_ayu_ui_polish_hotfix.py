@@ -420,28 +420,51 @@ def patch_context_menu(root: Path) -> None:
             "custom action section state",
         )
 
-    section_separator = '''            if !ayuCustomActionsStarted {\n                if !actions.isEmpty {\n                    actions.append(.separator)\n                }\n                ayuCustomActionsStarted = true\n            }\n'''
-
-    # Replace one separator block in each Ayu action region. The first action that
-    # actually exists starts the custom section; later Ayu actions stay contiguous.
+    # Ayu actions can be nested at different Swift indentation levels. History is
+    # inside `if !ayuHistory.isEmpty`, while Read/Burn/Details are one level higher.
+    # Normalize the pre-action separator at the indentation where it actually lives.
+    # The first Ayu action inserts the only boundary from stock Telegram actions;
+    # every later Ayu action sees ayuCustomActionsStarted == true and stays contiguous.
     regions = [
         ("        // AYU_REQUESTED_UI_HISTORY_v0_3\n", "        if AyuRuntimeSettings.suppressReadMessages"),
         ("        if AyuRuntimeSettings.suppressReadMessages", "        // AYU_VIEW_ONCE_BURN_v0_3\n"),
         ("        // AYU_VIEW_ONCE_BURN_v0_3\n", "        // AYU_SPY_DETAILS_v0_3\n"),
         ("        // AYU_SPY_DETAILS_v0_3\n", "        return ContextController.Items(content: .list(actions), tip: nil)\n"),
     ]
-    old_separator = '''            if !actions.isEmpty {\n                actions.append(.separator)\n            }\n'''
+    separator_variants = []
+    for indent in ("            ", "                "):
+        old_separator = (
+            indent + "if !actions.isEmpty {\n"
+            + indent + "    actions.append(.separator)\n"
+            + indent + "}\n"
+        )
+        section_separator = (
+            indent + "if !ayuCustomActionsStarted {\n"
+            + indent + "    if !actions.isEmpty {\n"
+            + indent + "        actions.append(.separator)\n"
+            + indent + "    }\n"
+            + indent + "    ayuCustomActionsStarted = true\n"
+            + indent + "}\n"
+        )
+        separator_variants.append((old_separator, section_separator))
+
     for start_anchor, end_anchor in regions:
         start = text.find(start_anchor)
         end = text.find(end_anchor, start + len(start_anchor))
         if start < 0 or end < 0:
             raise RuntimeError(f"custom action region missing: {start_anchor.strip()}")
         region = text[start:end]
-        if section_separator not in region:
-            if old_separator not in region:
-                raise RuntimeError(f"custom action separator anchor missing: {start_anchor.strip()}")
-            region = region.replace(old_separator, section_separator, 1)
-            text = text[:start] + region + text[end:]
+        if "if !ayuCustomActionsStarted {" in region:
+            continue
+        replaced = False
+        for old_separator, section_separator in separator_variants:
+            if old_separator in region:
+                region = region.replace(old_separator, section_separator, 1)
+                text = text[:start] + region + text[end:]
+                replaced = True
+                break
+        if not replaced:
+            raise RuntimeError(f"custom action separator anchor missing: {start_anchor.strip()}")
 
     path.write_text(text, encoding="utf-8")
 
