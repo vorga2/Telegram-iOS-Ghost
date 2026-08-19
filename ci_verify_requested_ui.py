@@ -22,12 +22,14 @@ def main() -> None:
     requested = workspace / "apply_ayu_requested_ui_hotfix.py"
     correctness = workspace / "apply_ayu_runtime_correctness_hotfix.py"
     polish = workspace / "apply_ayu_ui_polish_hotfix.py"
-    for script in (requested, correctness, polish):
+    retention = workspace / "apply_ayu_group_retention_hotfix.py"
+    for script in (requested, correctness, polish, retention):
         py_compile.compile(str(script), doraise=True)
 
     subprocess.run([sys.executable, str(requested), str(telegram)], check=True)
     subprocess.run([sys.executable, str(correctness), str(telegram)], check=True)
     subprocess.run([sys.executable, str(polish), str(telegram)], check=True)
+    subprocess.run([sys.executable, str(retention), str(telegram)], check=True)
 
     runtime = (telegram / "submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift").read_text(encoding="utf-8")
     require('case .trash:\n            return "🗑️"' in runtime, "trash marker is not 🗑️")
@@ -61,11 +63,21 @@ def main() -> None:
     require("AYU_DELETED_STABLE_REFRESH_v0_3" in manager, "live deleted refresh marker missing")
     require("AYU_DELETED_LOW_LATENCY_v0_3" in manager, "low-latency raw delete path missing")
 
+    # Startup/reconnect differences and channel available-min cleanup must not
+    # remove messages already retained by Ayu. This is transaction-event work only.
+    state_utils = (telegram / "submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift").read_text(encoding="utf-8")
+    require(state_utils.count("AYU_DELETED_CANONICAL_RETENTION_v0_3") >= 4, "canonical deleted retention is incomplete")
+    require(state_utils.count("AYU_DELETED_RANGE_RETENTION_v0_3") >= 2, "channel min-range retention is incomplete")
+    require("ayuEffectiveIds = ids.filter { !AyuRuntimeSettings.isDeleted($0) }" in state_utils, "direct canonical deletes can still remove retained messages")
+    require("transaction.messageIdsForGlobalIds(ids).filter { AyuRuntimeSettings.isDeleted($0) }" in state_utils, "global canonical deletes can still remove retained messages")
+    require("transaction.addMessages(ayuPreservedMessages, location: .Random)" in state_utils, "channel range cleanup does not restore retained messages")
+
     menu = (telegram / "submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift").read_text(encoding="utf-8")
     require('text: "История"' in menu, "History context action missing")
     require("AYU_HISTORY_SCROLL_v0_3" in menu, "scrollable History content missing")
     require("AyuEditHistoryContextContent" in menu and "ASScrollNode" in menu, "History is not scrollable")
     require('UIImage(bundleImageName: "Chat/Context Menu/Copy")' in menu, "History icon missing")
+    require('UIImage(bundleImageName: "Chat/Context Menu/Back")' in menu, "History Back icon missing")
     require("content: .custom(historyContent)" in menu, "History still uses an unbounded normal context list")
     history_pos = menu.find('text: "История"')
     read_pos = menu.find('text: "Прочитать"')
