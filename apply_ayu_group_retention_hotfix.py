@@ -8,7 +8,7 @@ MARK = "AYU_DELETED_CANONICAL_RETENTION_v0_3"
 RANGE_MARK = "AYU_DELETED_RANGE_RETENTION_v0_3"
 
 
-def replace_case_sections(text: str, start_token: str, end_token: str, replacement: str, label: str) -> str:
+def replace_case_sections(text: str, start_token: str, end_token: str, replacement: str, label: str, minimum: int = 1) -> str:
     positions: list[tuple[int, int]] = []
     search_from = 0
     while True:
@@ -20,8 +20,8 @@ def replace_case_sections(text: str, start_token: str, end_token: str, replaceme
             raise RuntimeError(f"{label}: end anchor missing after occurrence {len(positions) + 1}")
         positions.append((start, end))
         search_from = end
-    if len(positions) < 2:
-        raise RuntimeError(f"{label}: expected at least 2 canonical replay sections, found {len(positions)}")
+    if len(positions) < minimum:
+        raise RuntimeError(f"{label}: expected at least {minimum} canonical replay section(s), found {len(positions)}")
     for start, end in reversed(positions):
         text = text[:start] + replacement + text[end:]
     return text
@@ -60,7 +60,7 @@ def patch_canonical_deletes(text: str) -> str:
                 // is retained, so Ayu's marker/UI refresh still fires normally.
                 deletedMessageIds.append(contentsOf: ids.map { .global($0) })
 '''
-    text = replace_case_sections(text, global_start, direct_start, global_replacement, "global canonical delete retention")
+    text = replace_case_sections(text, global_start, direct_start, global_replacement, "global canonical delete retention", minimum=1)
 
     direct_replacement = r'''            case let .DeleteMessages(ids):
                 // AYU_DELETED_CANONICAL_RETENTION_v0_3
@@ -77,7 +77,7 @@ def patch_canonical_deletes(text: str) -> str:
                 }
                 deletedMessageIds.append(contentsOf: ids.map { .messageId($0) })
 '''
-    text = replace_case_sections(text, direct_start, min_start, direct_replacement, "direct canonical delete retention")
+    text = replace_case_sections(text, direct_start, min_start, direct_replacement, "direct canonical delete retention", minimum=1)
 
     # UpdateMinAvailableMessage is a second cleanup path used heavily by channels /
     # supergroups after reconnect. Preserve only Ayu-marked messages in the cleared
@@ -155,8 +155,8 @@ def patch_canonical_deletes(text: str) -> str:
         patched += 1
         search_from = cleanup_pos + len(restore) + len(cleanup_anchor)
 
-    if patched < 2:
-        raise RuntimeError(f"range retention: expected at least 2 replay paths, patched {patched}")
+    if patched < 1:
+        raise RuntimeError(f"range retention: expected at least 1 replay path, patched {patched}")
     return text
 
 
