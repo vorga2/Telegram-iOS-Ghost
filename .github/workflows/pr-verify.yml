@@ -148,6 +148,9 @@ jobs:
       - name: Apply Ayu UI polish and low-latency deleted refresh
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_ui_polish_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Preserve deleted messages across group resyncs
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_group_retention_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Create build configuration
         shell: bash
         run: |
