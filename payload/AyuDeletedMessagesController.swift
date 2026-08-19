@@ -9,7 +9,8 @@ import Postbox
 /// Read-only chat-like history that reuses Telegram's stock message renderer.
 /// Deleted messages remain real Postbox messages, so replies/media/bubbles keep
 /// the exact same layout as the ordinary chat. The only difference is that this
-/// view filters the history to Ayu-marked ids and renders them at full opacity.
+/// view filters the history to Ayu-marked ids while keeping the same deleted
+/// styling as the ordinary chat.
 final class AyuDeletedMessagesChatContents: ChatCustomContentsProtocol {
     private final class Impl {
         let queue: Queue
@@ -122,11 +123,6 @@ final class AyuDeletedMessagesChatContents: ChatCustomContentsProtocol {
         self.impl = QueueLocalObject(queue: queue, generate: {
             return Impl(queue: queue, context: context, peerId: peerId)
         })
-        AyuRuntimeSettings.beginDeletedViewer(peerId: peerId)
-    }
-
-    deinit {
-        AyuRuntimeSettings.endDeletedViewer(peerId: self.peerId)
     }
 
     func enqueueMessages(messages: [EnqueueMessage]) {
