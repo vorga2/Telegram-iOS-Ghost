@@ -17,6 +17,7 @@ jobs:
         run: |
           python3 ci_verify_v03.py
           python3 ci_verify_hotfixes.py
+          python3 ci_verify_requested_ui.py
 
   build_ipa:
     needs: verify
@@ -133,6 +134,9 @@ jobs:
 
       - name: Apply Spy message Details
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_spy_details.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply requested Ayu UI/history hotfix
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_requested_ui_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
 
       - name: Create build configuration
         shell: bash
