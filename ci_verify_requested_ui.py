@@ -21,21 +21,26 @@ def main() -> None:
 
     requested = workspace / "apply_ayu_requested_ui_hotfix.py"
     correctness = workspace / "apply_ayu_runtime_correctness_hotfix.py"
-    py_compile.compile(str(requested), doraise=True)
-    py_compile.compile(str(correctness), doraise=True)
+    polish = workspace / "apply_ayu_ui_polish_hotfix.py"
+    for script in (requested, correctness, polish):
+        py_compile.compile(str(script), doraise=True)
 
     subprocess.run([sys.executable, str(requested), str(telegram)], check=True)
     subprocess.run([sys.executable, str(correctness), str(telegram)], check=True)
+    subprocess.run([sys.executable, str(polish), str(telegram)], check=True)
 
     runtime = (telegram / "submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift").read_text(encoding="utf-8")
     require('case .trash:\n            return "🗑️"' in runtime, "trash marker is not 🗑️")
+    require("AYU_DELETED_ASYNC_PERSIST_v0_3" in runtime, "deleted persistence is still synchronous")
+    require("deletedPersistenceQueue.async" in runtime, "deleted persistence queue missing")
+    require(runtime.count("persistDeletedStateAsync(updated)") >= 3, "deleted-state mutations do not persist asynchronously")
 
     manager = (telegram / "submodules/TelegramCore/Sources/State/AccountStateManager.swift").read_text(encoding="utf-8")
     require("AYU_SPY_HISTORY_MENU_v0_3" in manager, "edit-history query helper missing")
     require("SELECT edited_at, previous_text FROM edit_history" in manager, "edit-history query missing")
 
-    # Edit history must be captured from Telegram's canonical mutation replay so
-    # raw updates, getDifference and channel sync all take the same path.
+    # Edit history is captured from Telegram's canonical mutation replay so raw
+    # updates, getDifference and channel sync all take the same path.
     require("AYU_CANONICAL_EDIT_HISTORY_v0_3" in manager, "canonical edit-history hook missing")
     require("case let .EditMessage(messageId, updatedMessage)" in manager, "canonical EditMessage operation not captured")
     require("currentMessage.flags.contains(.Incoming)" in manager, "edit history is not limited to interlocutor messages")
@@ -49,31 +54,52 @@ def main() -> None:
     require("ayuRefreshPreservedDeletedMessages(updates)" in add_updates, "raw deleted refresh was lost")
     require("case .updateEditMessage, .updateEditChannelMessage" not in add_updates, "old raw-only edit interception still active")
 
-    # Live deleted restyle is a single Postbox identity change on the delete event;
-    # there are no timers, polling loops or per-frame DB reads.
+    # Live deleted restyle is event-driven only: Atomic state first, one Postbox
+    # identity mutation next, disk persistence on a background queue.
     stable_refresh = "UInt32(bitPattern: currentMessage.id.id) ^ 0xA5A5A5A5"
     require(manager.count(stable_refresh) >= 2, "one-shot live deleted stable-id refresh missing")
     require("AYU_DELETED_STABLE_REFRESH_v0_3" in manager, "live deleted refresh marker missing")
+    require("AYU_DELETED_LOW_LATENCY_v0_3" in manager, "low-latency raw delete path missing")
 
     menu = (telegram / "submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift").read_text(encoding="utf-8")
     require('text: "История"' in menu, "History context action missing")
-    require("ayuEditHistoryMenuItems" in menu and "ayuSpyEditHistory" in menu, "History nested menu wiring missing")
+    require("AYU_HISTORY_SCROLL_v0_3" in menu, "scrollable History content missing")
+    require("AyuEditHistoryContextContent" in menu and "ASScrollNode" in menu, "History is not scrollable")
+    require('UIImage(bundleImageName: "Chat/Context Menu/Copy")' in menu, "History icon missing")
+    require("content: .custom(historyContent)" in menu, "History still uses an unbounded normal context list")
     history_pos = menu.find('text: "История"')
     read_pos = menu.find('text: "Прочитать"')
     require(history_pos >= 0 and read_pos >= 0 and history_pos < read_pos, "History must be above Read")
+    require("AYU_CUSTOM_ACTION_SECTION_v0_3" in menu, "Ayu custom action section marker missing")
+    require(menu.count("if !ayuCustomActionsStarted {") >= 4, "Ayu actions are not grouped into one section")
 
     settings = (telegram / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift").read_text(encoding="utf-8")
-    require("AYU_GHOST_DROPDOWN_v0_3" in settings, "Ghost dropdown marker missing")
+    require("AYU_GHOST_EXPANDABLE_SWITCH_v0_3" in settings, "Ghost expandable switch missing")
+    require("ItemListExpandableSwitchItem(" in settings, "Ghost 5/5 header is not an expandable switch")
     require('.header("Режим призрака \\(enabledCount)/5", expanded)' in settings, "Ghost 5/5 header missing")
-    require("arguments.toggleExpanded" in settings, "Ghost header does not expand/collapse")
+    require('ItemListExpandableSwitchItem.SubItem(id: AnyHashable("read")' in settings, "Ghost subitems missing")
+    require('.actionsHeader,\n        .readOnActions(snapshot.readOnActions),\n        .useScheduled(snapshot.useScheduled)' in settings, "Actions are not outside the Ghost dropdown")
+    require('.master("Включить режим призрака", snapshot.master)' not in settings, "old separate Ghost master row is still emitted")
+    require("Сообщения отправляются без краткого выхода в онлайн." in settings, "scheduled-send explanation missing")
     require('(.trash, "🗑️")' in settings, "trash picker still uses eye")
 
+    enqueue = (telegram / "submodules/TelegramCore/Sources/PendingMessages/EnqueueMessage.swift").read_text(encoding="utf-8")
+    require("AYU_GHOST_SCHEDULED_NO_PULSE_v0_3" in enqueue, "useScheduled still performs the online pulse")
+    require("snapshot.master && AyuRuntimeSettings.snapshot.useScheduled" in enqueue, "scheduled Ghost send pulse guard missing")
+
+    background = (telegram / "submodules/ChatMessageBackground/Sources/ChatMessageBackground.swift").read_text(encoding="utf-8")
+    require("AYU_DELETED_BAKED_ALPHA_v0_3" in background, "cached deleted bubble alpha helper missing")
+    require("ayuAlphaImageCache" in background and "ayuCustomImageAlpha" in background, "deleted bubble alpha is not cached")
+
     bubble = (telegram / "submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift").read_text(encoding="utf-8")
-    require("AYU_STOCK_BUBBLE_ALPHA_v0_3" in bubble, "stock deleted bubble alpha patch missing")
-    require("let ayuDeletedVisible" in bubble, "deleted state is not cached per item layout")
-    require("let ayuTelegramThemeDeleted = ayuDeletedVisible && ayuDeletedBackgroundColor == nil" in bubble, "Telegram-theme deleted path missing")
-    require("backgroundNode.alpha = ayuTelegramThemeDeleted ? CGFloat(AyuRuntimeSettings.deletedMessageAlpha) : 1.0" in bubble, "stock bubble is not faded to deleted alpha")
-    require("backgroundWallpaperNode.alpha = ayuTelegramThemeDeleted ? CGFloat(AyuRuntimeSettings.deletedMessageAlpha) : 1.0" in bubble, "wallpaper bubble is not faded to deleted alpha")
+    require("let ayuDeletedVisible = AyuRuntimeSettings.isDeleted(item.message.id)" in bubble, "deleted styling is still viewer-dependent")
+    require("!AyuRuntimeSettings.isInDeletedViewer(item.message.id)" not in bubble, "deleted viewer still disables 0.5 styling")
+    require("backgroundNode.ayuCustomImageAlpha = ayuDeletedVisible ? CGFloat(AyuRuntimeSettings.deletedMessageAlpha) : nil" in bubble, "deleted alpha is not baked into the stock bubble")
+    require("backgroundWallpaperNode.alpha = ayuDeletedVisible ? 0.0 : 1.0" in bubble, "double wallpaper compositing can still shift dark-theme color")
+    require("ayuTelegramThemeDeleted" not in bubble, "old layer-alpha Telegram-theme path still present")
+
+    deleted_viewer = (telegram / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuDeletedMessagesController.swift").read_text(encoding="utf-8")
+    require("beginDeletedViewer" not in deleted_viewer and "endDeletedViewer" not in deleted_viewer, "deleted viewer still leaks full-opacity state into normal chat")
 
     item = (telegram / "submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageItemImpl.swift").read_text(encoding="utf-8")
     require("ayuDeletedWholeItem" not in item, "whole message item is still faded")
