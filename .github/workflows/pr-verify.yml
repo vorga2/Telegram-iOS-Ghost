@@ -145,6 +145,9 @@ jobs:
       - name: Fix edit history, live deleted refresh and stock bubble alpha
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_runtime_correctness_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Apply Ayu UI polish and low-latency deleted refresh
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_ui_polish_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Create build configuration
         shell: bash
         run: |
