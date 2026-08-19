@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+concurrency:
+  group: ayu-v03-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -137,6 +141,9 @@ jobs:
 
       - name: Apply requested Ayu UI/history hotfix
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_requested_ui_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Fix edit history, live deleted refresh and stock bubble alpha
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_runtime_correctness_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
 
       - name: Create build configuration
         shell: bash
