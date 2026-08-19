@@ -104,9 +104,11 @@ def main() -> int:
     manager = root / "submodules/TelegramCore/Sources/State/AccountStateManager.swift"
     t = manager.read_text(encoding="utf-8")
     old_tags = "                            localTags: currentMessage.localTags,\n"
-    new_tags = '''                            localTags: currentMessage.localTags.union(LocalMessageTags(rawValue: 1 << 30)),\n'''
+    new_tags = '''                            // AYU_FINAL_UI_REALTIME_FIX_v0_3\n                            localTags: currentMessage.localTags.union(LocalMessageTags(rawValue: 1 << 30)),\n'''
     if "LocalMessageTags(rawValue: 1 << 30)" not in t:
         t = one(t, old_tags, new_tags, "deleted realtime local tag")
+    elif "AYU_FINAL_UI_REALTIME_FIX_v0_3" not in t:
+        t = t.replace("                            localTags: currentMessage.localTags.union(LocalMessageTags(rawValue: 1 << 30)),\n", new_tags, 1)
     manager.write_text(t, encoding="utf-8")
 
     print("[ayu-behavior-hotfix] emoji markers + persistent Burn flame/menu state + read/realtime fixes patched")
