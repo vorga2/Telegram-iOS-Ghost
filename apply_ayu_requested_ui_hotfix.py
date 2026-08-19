@@ -2,7 +2,6 @@
 from pathlib import Path
 import sys
 
-MARK = "AYU_REQUESTED_UI_HISTORY_v0_3"
 HISTORY_MARK = "AYU_SPY_HISTORY_MENU_v0_3"
 GHOST_MARK = "AYU_GHOST_DROPDOWN_v0_3"
 
@@ -24,16 +23,18 @@ def main() -> int:
     # 1) Deleted marker: .trash is a real trash-can emoji, never the eye marker.
     runtime_path = root / "submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift"
     runtime = runtime_path.read_text(encoding="utf-8")
-    trash_old = '''        case .trash:\n            return "👀"\n'''
-    trash_new = '''        case .trash:\n            return "🗑️"\n'''
-    if trash_old in runtime:
-        runtime = one(runtime, trash_old, trash_new, "trash marker emoji")
+    trash_branch = '        case .trash:\n            return "👀"\n'
+    trash_branch_alt = '        case .trash:\n            return "🗑"\n'
+    trash_new = '        case .trash:\n            return "🗑️"\n'
+    if trash_branch in runtime:
+        runtime = runtime.replace(trash_branch, trash_new, 1)
+    elif trash_branch_alt in runtime:
+        runtime = runtime.replace(trash_branch_alt, trash_new, 1)
     elif trash_new not in runtime:
         raise RuntimeError("trash marker branch missing")
     runtime_path.write_text(runtime, encoding="utf-8")
 
-    # 2) Edit history query. Reuse the existing indexed edit_history table and
-    # Documents/Deleted/deleted.sqlite; no second database and no polling.
+    # 2) Edit-history query: reuse the existing indexed edit_history table.
     manager_path = root / "submodules/TelegramCore/Sources/State/AccountStateManager.swift"
     manager = manager_path.read_text(encoding="utf-8")
     if HISTORY_MARK not in manager:
@@ -78,7 +79,7 @@ public func ayuSpyEditHistory(_ messageId: MessageId) -> [AyuSpyEditRevision] {
         manager = one(manager, anchor, helper + anchor, "edit history query helper")
     manager_path.write_text(manager, encoding="utf-8")
 
-    # 3) Context menu: History is inserted immediately before Ayu's Read action.
+    # 3) Context menu: History sits immediately above Ayu's explicit Read action.
     menu_path = root / "submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift"
     menu = menu_path.read_text(encoding="utf-8")
     if HISTORY_MARK not in menu:
@@ -105,8 +106,7 @@ private func ayuEditHistoryMenuItems(message: EngineRawMessage, revisions: [AyuS
         menu = one(menu, helper_anchor, menu_helper + helper_anchor, "history menu helper")
 
         read_anchor = "        if AyuRuntimeSettings.suppressReadMessages, let ayuMessage = messages.first, ayuMessage.effectivelyIncoming(context.account.peerId) {\n"
-        history_action = r'''        // AYU_REQUESTED_UI_HISTORY_v0_3: show saved incoming edit revisions
-        // directly above the explicit Ayu "Прочитать" action.
+        history_action = r'''        // AYU_REQUESTED_UI_HISTORY_v0_3
         if let ayuHistoryMessage = messages.first,
            ayuHistoryMessage.effectivelyIncoming(context.account.peerId),
            AyuRuntimeSettings.snapshot.saveEditHistory {
@@ -129,11 +129,9 @@ private func ayuEditHistoryMenuItems(message: EngineRawMessage, revisions: [AyuS
         menu = one(menu, read_anchor, history_action + read_anchor, "History before Read")
     menu_path.write_text(menu, encoding="utf-8")
 
-    # 4) Ghost settings: turn the 5/5 row into a real collapsible header.
+    # 4) Ghost settings: 5/5 is a collapsible header.
     settings_path = root / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift"
     settings = settings_path.read_text(encoding="utf-8")
-
-    # Correct the customization picker too: trash and eye are different styles.
     settings = settings.replace('(.trash, "👀")', '(.trash, "🗑️")', 1)
 
     if GHOST_MARK not in settings:
@@ -210,14 +208,15 @@ private func ayuEditHistoryMenuItems(message: EngineRawMessage, revisions: [AyuS
             "    var revisionValue: Int32 = 0\n    var expandedValue = false\n",
             "Ghost expanded state",
         )
-        signal_anchor = "    let signal = combineLatest(context.sharedContext.presentationData, revision.get())\n"
-        if signal_anchor not in ghost:
+
+        # Generated Ayu settings keep the signal pipeline on one line. Anchor only
+        # the stable start of the declaration instead of depending on formatting.
+        signal_start = ghost.find("    let signal = combineLatest(")
+        if signal_start < 0:
             raise RuntimeError("Ghost signal anchor missing")
-        ghost = ghost.replace(
-            signal_anchor,
-            "    arguments.toggleExpanded = {\n        expandedValue.toggle()\n        bump()\n    }\n" + signal_anchor,
-            1,
-        )
+        toggle_code = "    arguments.toggleExpanded = {\n        expandedValue.toggle()\n        bump()\n    }\n"
+        ghost = ghost[:signal_start] + toggle_code + ghost[signal_start:]
+
         ghost = one(
             ghost,
             "ayuGhostEntries(AyuRuntimeSettings.snapshot)",
