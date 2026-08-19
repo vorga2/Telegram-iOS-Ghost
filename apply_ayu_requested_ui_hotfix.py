@@ -194,9 +194,14 @@ private func ayuEditHistoryMenuItems(message: EngineRawMessage, revisions: [AyuS
         settings = one(settings, old_entries, new_entries, "Ghost entries dropdown")
 
         ghost_start = settings.find("private func ayuGhostSettingsController(context: AccountContext) -> ViewController {")
-        ghost_end = settings.find("func ayuSettingsController(context: AccountContext) -> ViewController {", ghost_start)
-        if ghost_start < 0 or ghost_end < 0:
+        ghost_end_candidates = [
+            settings.find("private func ayuSpySettingsController(context: AccountContext) -> ViewController {", ghost_start),
+            settings.find("func ayuSettingsController(context: AccountContext) -> ViewController {", ghost_start),
+        ]
+        ghost_end_candidates = [value for value in ghost_end_candidates if value >= 0]
+        if ghost_start < 0 or not ghost_end_candidates:
             raise RuntimeError("Ghost controller bounds missing")
+        ghost_end = min(ghost_end_candidates)
         ghost = settings[ghost_start:ghost_end]
 
         ghost = one(
