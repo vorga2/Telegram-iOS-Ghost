@@ -64,10 +64,12 @@ def main() -> None:
     require("AYU_DELETED_LOW_LATENCY_v0_3" in manager, "low-latency raw delete path missing")
 
     # Startup/reconnect differences and channel available-min cleanup must not
-    # remove messages already retained by Ayu. This is transaction-event work only.
+    # remove messages already retained by Ayu. The pinned Telegram source has one
+    # canonical replay switch, so verify the two delete cases semantically instead
+    # of assuming duplicated replay blocks.
     state_utils = (telegram / "submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift").read_text(encoding="utf-8")
-    require(state_utils.count("AYU_DELETED_CANONICAL_RETENTION_v0_3") >= 4, "canonical deleted retention is incomplete")
-    require(state_utils.count("AYU_DELETED_RANGE_RETENTION_v0_3") >= 2, "channel min-range retention is incomplete")
+    require(state_utils.count("AYU_DELETED_CANONICAL_RETENTION_v0_3") >= 2, "canonical deleted retention is incomplete")
+    require(state_utils.count("AYU_DELETED_RANGE_RETENTION_v0_3") >= 1, "channel min-range retention is incomplete")
     require("ayuEffectiveIds = ids.filter { !AyuRuntimeSettings.isDeleted($0) }" in state_utils, "direct canonical deletes can still remove retained messages")
     require("transaction.messageIdsForGlobalIds(ids).filter { AyuRuntimeSettings.isDeleted($0) }" in state_utils, "global canonical deletes can still remove retained messages")
     require("transaction.addMessages(ayuPreservedMessages, location: .Random)" in state_utils, "channel range cleanup does not restore retained messages")
