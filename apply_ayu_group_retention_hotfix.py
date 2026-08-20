@@ -6,6 +6,7 @@ from pathlib import Path
 
 MARK = "AYU_DELETED_CANONICAL_RETENTION_v0_3"
 RANGE_MARK = "AYU_DELETED_RANGE_RETENTION_v0_3"
+DARK_THEME_MARK = "AYU_DELETED_DARK_THEME_BACKDROP_v0_3"
 
 
 def replace_case_sections(text: str, start_token: str, end_token: str, replacement: str, label: str, minimum: int = 1) -> str:
@@ -160,6 +161,26 @@ def patch_canonical_deletes(text: str) -> str:
     return text
 
 
+def patch_dark_theme_deleted_bubble(root: Path) -> None:
+    path = root / "submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift"
+    text = path.read_text(encoding="utf-8")
+    if DARK_THEME_MARK in text:
+        return
+
+    old_alpha = '''        // AYU_DELETED_BAKED_ALPHA_v0_3: use one cached stock bubble image with\n        // alpha baked into its pixels. This avoids the dark-theme color shift caused\n        // by compositing both the normal and wallpaper bubble nodes at half alpha.\n        strongSelf.backgroundNode.ayuCustomFillColor = ayuDeletedBackgroundColor\n        strongSelf.backgroundNode.ayuCustomImageAlpha = ayuDeletedVisible ? CGFloat(AyuRuntimeSettings.deletedMessageAlpha) : nil\n        let ayuBackgroundMaskMode = ayuDeletedBackgroundColor == nil ? strongSelf.backgroundMaskMode : false\n        strongSelf.backgroundNode.alpha = 1.0\n        strongSelf.backgroundWallpaperNode.alpha = ayuDeletedVisible ? 0.0 : 1.0\n'''
+    new_alpha = '''        // AYU_DELETED_BAKED_ALPHA_v0_3: keep Telegram's native bubble source.\n        // Some dark themes render the bubble through WallpaperBubbleBackgroundNode\n        // instead of a UIImage. Prepare the image alpha here, then after setType\n        // choose exactly the source Telegram actually produced.\n        let ayuDeletedAlpha = CGFloat(AyuRuntimeSettings.deletedMessageAlpha)\n        let ayuTelegramThemeDeleted = ayuDeletedVisible && ayuDeletedBackgroundColor == nil\n        strongSelf.backgroundNode.ayuCustomFillColor = ayuDeletedBackgroundColor\n        strongSelf.backgroundNode.ayuCustomImageAlpha = ayuDeletedVisible ? ayuDeletedAlpha : nil\n        let ayuBackgroundMaskMode = ayuDeletedBackgroundColor == nil ? strongSelf.backgroundMaskMode : false\n        strongSelf.backgroundNode.alpha = 1.0\n        strongSelf.backgroundWallpaperNode.alpha = 1.0\n'''
+    if text.count(old_alpha) != 1:
+        raise RuntimeError(f"dark-theme deleted alpha block: expected 1 anchor, found {text.count(old_alpha)}")
+    text = text.replace(old_alpha, new_alpha, 1)
+
+    set_type_anchor = '''        strongSelf.backgroundNode.setType(type: backgroundType, highlighted: false, graphics: graphics, maskMode: ayuBackgroundMaskMode, hasWallpaper: hasWallpaper, transition: legacyTransition, backgroundNode: presentationContext.backgroundNode)\n        strongSelf.backgroundWallpaperNode.setType(type: backgroundType, theme: item.presentationData.theme, essentialGraphics: graphics, maskMode: strongSelf.backgroundMaskMode, backgroundNode: presentationContext.backgroundNode)\n'''
+    post_set_type = set_type_anchor + '''\n        // AYU_DELETED_DARK_THEME_BACKDROP_v0_3\n        // If Telegram produced a normal bubble image, its alpha is already baked and\n        // cached by ChatMessageBackground. If the image is nil, the theme is using\n        // the wallpaper/backdrop bubble path; fade that one layer instead. Never hide\n        // both layers, and never change text/media/status opacity.\n        if ayuTelegramThemeDeleted && !strongSelf.backgroundNode.hasImage {\n            strongSelf.backgroundWallpaperNode.alpha = ayuDeletedAlpha\n        } else if ayuDeletedVisible && ayuDeletedBackgroundColor != nil {\n            strongSelf.backgroundWallpaperNode.alpha = 0.0\n        } else {\n            strongSelf.backgroundWallpaperNode.alpha = 1.0\n        }\n'''
+    if text.count(set_type_anchor) != 1:
+        raise RuntimeError(f"dark-theme post-setType anchor: expected 1, found {text.count(set_type_anchor)}")
+    text = text.replace(set_type_anchor, post_set_type, 1)
+    path.write_text(text, encoding="utf-8")
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: apply_ayu_group_retention_hotfix.py <Telegram-iOS root>", file=sys.stderr)
@@ -173,7 +194,8 @@ def main() -> int:
     text = path.read_text(encoding="utf-8")
     text = patch_canonical_deletes(text)
     path.write_text(text, encoding="utf-8")
-    print("[ayu-group-retention] canonical delete + channel min-range retention installed")
+    patch_dark_theme_deleted_bubble(root)
+    print("[ayu-group-retention] canonical delete + channel min-range retention + dark-theme Telegram bubble installed")
     return 0
 
 
