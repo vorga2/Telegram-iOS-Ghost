@@ -22,6 +22,7 @@ jobs:
           python3 ci_verify_v03.py
           python3 ci_verify_hotfixes.py
           python3 ci_verify_requested_ui.py
+          python3 ci_verify_branding_theme.py
 
   build_ipa:
     needs: verify
@@ -154,7 +155,7 @@ jobs:
       - name: Tune Telegram-theme deleted bubble opacity
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_subtle_alpha_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
 
-      - name: Apply AyuGram branding and zero-polling call pill
+      - name: Apply AyuGram branding and theme sync
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_branding_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
 
       - name: Create build configuration
@@ -195,7 +196,7 @@ jobs:
           cd "$RUNNER_TEMP/Telegram-iOS"
           mkdir -p "$RUNNER_TEMP/output"
           python3 build-system/Make/Make.py \
-            --cacheDir="$HOME/telegram-bazel-cache" \
+            --cacheDir="$HOME/runner/telegram-bazel-cache" \
             build \
             --configurationPath=build-system/ayu-ci-configuration.json \
             --codesigningInformationPath=build-system/fake-codesigning \
