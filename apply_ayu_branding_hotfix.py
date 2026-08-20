@@ -28,9 +28,8 @@ def main() -> int:
 
     root = Path(sys.argv[1]).resolve()
 
-    # Apply the central PresentationData cloud-variant fix. It only participates
-    # when Telegram already recalculates presentation data; no forced refresh,
-    # global trait override, timer, polling or frame callback.
+    # Resolve the cloud light/dark variant centrally in PresentationData only.
+    # Telegram still owns normal theme propagation and native glass updates.
     theme_script = Path(__file__).resolve().with_name("apply_ayu_theme_selection_hotfix.py")
     if not theme_script.exists():
         raise RuntimeError(f"missing theme hotfix: {theme_script}")
@@ -40,7 +39,6 @@ def main() -> int:
     build_path = root / "Telegram/BUILD"
     build = build_path.read_text(encoding="utf-8")
 
-    # Main application plist used by the real Bazel Telegram target.
     if MAIN_MARK not in build:
         old_main = '''    <key>CFBundleDisplayName</key>
     <string>Telegram</string>
@@ -59,7 +57,6 @@ def main() -> int:
 '''
         build = one(build, old_main, new_main, "main TelegramInfoPlist branding")
 
-    # AppNameInfoPlist is merged into extensions/widgets.
     if EXT_MARK not in build:
         old_ext = '''plist_fragment(
     name = "AppNameInfoPlist",
@@ -80,9 +77,9 @@ plist_fragment(
 '''
         build = one(build, old_ext, new_ext, "extension AppNameInfoPlist branding")
 
-    # iOS system services may attribute calls/intents to an embedded extension's
-    # CFBundleName rather than the host CFBundleDisplayName. The previous IPA still
-    # contained CFBundleName=Telegram in every .appex. Brand those too.
+    # LaunchServices/CallKit attribution may resolve an embedded bundle record.
+    # Remove the remaining literal CFBundleName=Telegram values from host/appex
+    # plist fragments while leaving Bazel target/module names untouched.
     if EXT_NAME_MARK not in build:
         build = f"# {EXT_NAME_MARK}\n" + build
         build = build.replace(
@@ -92,7 +89,6 @@ plist_fragment(
 
     build_path.write_text(build, encoding="utf-8")
 
-    # Keep project/fallback plists consistent.
     for relative in ("Telegram/Telegram-iOS/InfoBazel.plist", "Telegram/Telegram-iOS/Info.plist"):
         path = root / relative
         if not path.exists():
@@ -120,23 +116,27 @@ plist_fragment(
         )
         path.write_text(text, encoding="utf-8")
 
-    for path in (root / "Telegram/Telegram-iOS").glob("*.lproj/InfoPlist.strings"):
+    # CXXPCCallSource gets its name from LaunchServices' application record, not
+    # CXProviderConfiguration.localizedName. Make the localized bundle record
+    # explicit for EVERY language. Previously languages such as ru/en had no
+    # CFBundleDisplayName entry at all in InfoPlist.strings.
+    localized_plists = list((root / "Telegram/Telegram-iOS").glob("*.lproj/InfoPlist.strings"))
+    if not localized_plists:
+        raise RuntimeError("localized InfoPlist.strings files not found")
+    for path in localized_plists:
         text = path.read_text(encoding="utf-8")
-        text = re.sub(
-            r'^\s*"CFBundleDisplayName"\s*=\s*"[^"]*"\s*;\s*$',
-            '"CFBundleDisplayName" = "AyuGram";',
-            text,
-            flags=re.MULTILINE,
-        )
-        text = re.sub(
-            r'^\s*"CFBundleName"\s*=\s*"[^"]*"\s*;\s*$',
-            '"CFBundleName" = "AyuGram";',
-            text,
-            flags=re.MULTILINE,
-        )
+        display_pattern = re.compile(r'^\s*"CFBundleDisplayName"\s*=\s*"[^"]*"\s*;\s*$', re.MULTILINE)
+        name_pattern = re.compile(r'^\s*"CFBundleName"\s*=\s*"[^"]*"\s*;\s*$', re.MULTILINE)
+        if display_pattern.search(text):
+            text = display_pattern.sub('"CFBundleDisplayName" = "AyuGram";', text, count=1)
+        else:
+            text = '"CFBundleDisplayName" = "AyuGram";\n' + text
+        if name_pattern.search(text):
+            text = name_pattern.sub('"CFBundleName" = "AyuGram";', text, count=1)
+        else:
+            text = '"CFBundleName" = "AyuGram";\n' + text
         path.write_text(text, encoding="utf-8")
 
-    # Keep the explicit CallKit provider label branded as well.
     callkit_path = root / "submodules/TelegramCallsUI/Sources/CallKitIntegration.swift"
     if not callkit_path.exists():
         raise RuntimeError(f"missing CallKit source: {callkit_path}")
@@ -164,6 +164,10 @@ plist_fragment(
         raise RuntimeError("embedded bundle-name branding marker missing")
     if "<key>CFBundleName</key>\n    <string>Telegram</string>" in verify_build:
         raise RuntimeError("an embedded bundle still has CFBundleName=Telegram")
+    for path in localized_plists:
+        text = path.read_text(encoding="utf-8")
+        if '"CFBundleDisplayName" = "AyuGram";' not in text or '"CFBundleName" = "AyuGram";' not in text:
+            raise RuntimeError(f"localized LaunchServices name missing: {path}")
     if 'CXProviderConfiguration(localizedName: "AyuGram")' not in callkit_path.read_text(encoding="utf-8"):
         raise RuntimeError("AyuGram CallKit display name was not installed")
 
@@ -171,7 +175,6 @@ plist_fragment(
     if presentation_data.count(THEME_MARK) != 4:
         raise RuntimeError("central light/dark cloud-theme resolution is incomplete")
 
-    # These old experiments must stay absent from the fresh Telegram checkout.
     shared = (root / "submodules/TelegramUI/Sources/SharedAccountContext.swift").read_text(encoding="utf-8")
     theme_settings = (root / "submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift").read_text(encoding="utf-8")
     theme_picker = (root / "submodules/SettingsUI/Sources/ThemePickerController.swift").read_text(encoding="utf-8")
@@ -180,7 +183,7 @@ plist_fragment(
     if "AYU_THEME_VARIANT_SELECTION_v0_3" in theme_settings or "AYU_THEME_VARIANT_SELECTION_v0_3" in theme_picker:
         raise RuntimeError("obsolete controller-level theme selection workaround is still active")
 
-    print("[ayu-final] central theme variant fix + all AyuGram bundle names + CallKit branding")
+    print("[ayu-final] central theme fix + localized/all-bundle AyuGram attribution")
     return 0
 
 
