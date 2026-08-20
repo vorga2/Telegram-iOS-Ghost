@@ -1,4 +1,4 @@
-name: Ayu v0.3 PR Verify + IPA
+name: Ayu Ghost-only Diagnostic IPA
 
 on:
   pull_request:
@@ -17,12 +17,53 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Verify pinned Telegram patch
+
+      - name: Verify Ghost-only patch on pinned Telegram
+        shell: bash
         run: |
-          python3 ci_verify_v03.py
-          python3 ci_verify_hotfixes.py
-          python3 ci_verify_requested_ui.py
-          python3 ci_verify_branding_theme.py
+          set -euo pipefail
+          python3 -m py_compile apply_ayu_ghost_only.py apply_ayu_branding_only.py
+
+          REF="$(tr -d '[:space:]' < telegram-ref.txt)"
+          ROOT="$RUNNER_TEMP/Telegram-iOS"
+          rm -rf "$ROOT"
+          git init "$ROOT"
+          cd "$ROOT"
+          git remote add origin https://github.com/TelegramMessenger/Telegram-iOS.git
+          git fetch --depth 1 origin "$REF"
+          git checkout --detach FETCH_HEAD
+
+          python3 "$GITHUB_WORKSPACE/apply_ayu_ghost_only.py" "$ROOT"
+          python3 "$GITHUB_WORKSPACE/apply_ayu_branding_only.py" "$ROOT"
+
+          RUNTIME="submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift"
+          SETTINGS="submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift"
+
+          grep -q 'public enum AyuRuntimeSettings' "$RUNTIME"
+          grep -q 'РЕЖИМ ПРИЗРАКА' "$SETTINGS"
+          ! grep -Eqi 'deleted|удал[её]н|spy|history|archive' "$RUNTIME" "$SETTINGS"
+
+          # These files are the deleted/theme render hot paths. They must remain byte-for-byte stock.
+          for path in \
+            submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift \
+            submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/StringForMessageTimestampStatus.swift \
+            submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/ChatMessageDateAndStatusNode.swift \
+            submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageItemImpl.swift \
+            submodules/TelegramUI/Components/Chat/ChatMessageReplyInfoNode/Sources/ChatMessageReplyInfoNode.swift \
+            submodules/TelegramUI/Sources/ChatPinnedMessageTitlePanelNode.swift \
+            submodules/TelegramUI/Components/PeerInfo/PeerInfoVisualMediaPaneNode/Sources/PeerInfoGiftsPaneNode.swift \
+            submodules/TelegramUI/Sources/SharedAccountContext.swift \
+            submodules/TelegramUI/Components/LiquidLens/Sources/LiquidLensView.swift \
+            submodules/TelegramUI/Components/TabBarComponent/Sources/TabBarComponent.swift \
+            submodules/TabBarUI/Sources/TabBarContollerNode.swift \
+            submodules/Display/Source/NativeWindowHostView.swift \
+            submodules/TelegramPresentationData/Sources/PresentationData.swift
+          do
+            git diff --exit-code HEAD -- "$path"
+          done
+
+          test ! -e submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuDeletedMessagesController.swift
+          echo '=== GHOST-ONLY VERIFY SUCCESS: deleted/spy/theme render hooks absent ==='
 
   build_ipa:
     needs: verify
@@ -65,98 +106,36 @@ jobs:
           git submodule update --init --recursive --depth 1 --jobs 8
           ACTUAL_REF="$(git rev-parse HEAD)"
           test "$ACTUAL_REF" = "$REF" || { echo "Pinned Telegram ref mismatch: $ACTUAL_REF != $REF"; exit 1; }
-          echo "Telegram ref: $ACTUAL_REF"
           echo "ref=$ACTUAL_REF" >> "$GITHUB_OUTPUT"
 
       - name: Restore Bazel disk cache
         uses: actions/cache/restore@v4
         with:
           path: ~/telegram-bazel-cache
-          key: telegram-ios-bazel-v030-macos26-xcode262-${{ steps.telegram-source.outputs.ref }}-${{ github.run_id }}
+          key: telegram-ios-ghostonly-macos26-xcode262-${{ steps.telegram-source.outputs.ref }}-${{ github.run_id }}
           restore-keys: |
             telegram-ios-bazel-v030-macos26-xcode262-${{ steps.telegram-source.outputs.ref }}-
-            telegram-ios-bazel-v025-macos26-xcode262-${{ steps.telegram-source.outputs.ref }}-
 
-      - name: Apply Ayu v0.3 UI v2 patcher
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_v03_ui_v2.py" "$RUNNER_TEMP/Telegram-iOS"
+      - name: Apply Ghost-only Ayu patch
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_ghost_only.py" "$RUNNER_TEMP/Telegram-iOS"
 
-      - name: Apply Ayu profile cache
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_profile_cache.py" "$RUNNER_TEMP/Telegram-iOS"
+      - name: Apply AyuGram branding only
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_branding_only.py" "$RUNNER_TEMP/Telegram-iOS"
 
-      - name: Apply Ayu view-once preservation
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_view_once.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Apply durable view-once persistence
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_view_once_durable.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Apply view-once burn action
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_view_once_burn.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Restore stock Telegram date and status UI
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_stock_ui_guard.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Apply deleted bubble background
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_background.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Apply real-time deleted message retention
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_realtime.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Fix one-shot manual read synchronization
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_manual_read_fix.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Read current chat on send
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_send_read.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Normalize behavior hotfix anchor
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_behavior_anchor_compat.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Apply behavior hotfixes
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_behavior_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Archive deleted metadata and attachments
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_archive.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Expose AyuGram Documents in Files
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_files_visibility.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Restore deleted marker and Telegram-theme background default
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_visual_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Apply Ghost presence immediately on toggle
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_presence_toggle_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Apply AyuGram category settings
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_settings_categories.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Apply Spy settings
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_spy_settings.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Persist Spy edit history
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_spy_edit_history.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Persist Spy read dates
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_spy_read_dates.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Apply Spy message Details
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_spy_details.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Apply requested Ayu UI/history hotfix
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_requested_ui_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Fix edit history, live deleted refresh and stock bubble alpha
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_runtime_correctness_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Apply Ayu UI polish and low-latency deleted refresh
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_ui_polish_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Preserve deleted messages across group resyncs
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_group_retention_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Tune Telegram-theme deleted bubble opacity
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_subtle_alpha_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Apply AyuGram branding and theme sync
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_branding_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+      - name: Assert deleted and theme hooks are absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/Telegram-iOS"
+          ! grep -Eqi 'deleted|удал[её]н|spy|history|archive' \
+            submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift \
+            submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
+          git diff --exit-code HEAD -- submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift
+          git diff --exit-code HEAD -- submodules/TelegramUI/Sources/SharedAccountContext.swift
+          git diff --exit-code HEAD -- submodules/TelegramUI/Components/LiquidLens/Sources/LiquidLensView.swift
+          git diff --exit-code HEAD -- submodules/TelegramUI/Components/TabBarComponent/Sources/TabBarComponent.swift
+          git diff --exit-code HEAD -- submodules/TabBarUI/Sources/TabBarContollerNode.swift
+          git diff --exit-code HEAD -- submodules/Display/Source/NativeWindowHostView.swift
 
       - name: Create build configuration
         shell: bash
@@ -211,14 +190,14 @@ jobs:
           set -euo pipefail
           IPA="$RUNNER_TEMP/output/Telegram.ipa"
           test -f "$IPA" || { find "$RUNNER_TEMP/output" -type f -print; exit 1; }
-          mv "$IPA" "$RUNNER_TEMP/output/AyuGram-iOS-v0.3.0.ipa"
-          echo "path=$RUNNER_TEMP/output/AyuGram-iOS-v0.3.0.ipa" >> "$GITHUB_OUTPUT"
-          ls -lh "$RUNNER_TEMP/output/AyuGram-iOS-v0.3.0.ipa"
+          mv "$IPA" "$RUNNER_TEMP/output/AyuGram-GhostOnly-iOS-v0.3.0.ipa"
+          echo "path=$RUNNER_TEMP/output/AyuGram-GhostOnly-iOS-v0.3.0.ipa" >> "$GITHUB_OUTPUT"
+          ls -lh "$RUNNER_TEMP/output/AyuGram-GhostOnly-iOS-v0.3.0.ipa"
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: AyuGram-iOS-v0.3.0-IPA
+          name: AyuGram-GhostOnly-iOS-v0.3.0-IPA
           path: ${{ steps.ipa.outputs.path }}
           compression-level: 0
           if-no-files-found: error
@@ -229,4 +208,4 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/telegram-bazel-cache
-          key: telegram-ios-bazel-v030-macos26-xcode262-${{ steps.telegram-source.outputs.ref }}-${{ github.run_id }}
+          key: telegram-ios-ghostonly-macos26-xcode262-${{ steps.telegram-source.outputs.ref }}-${{ github.run_id }}
