@@ -55,7 +55,8 @@ jobs:
           done
 
           grep -q 'AYU_THEME_STATE_REPAIR_v1' submodules/TelegramUI/Sources/SharedAccountContext.swift
-          grep -q 'AYU_CLOUD_THEME_FAMILY_FALLBACK_v1' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
+          grep -q 'AYU_CLOUD_THEME_FAMILY_FALLBACK_v2' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
+          grep -q 'return values.first(where: { $0.baseTheme == .classic || $0.baseTheme == .day }) ?? values.first' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
           grep -q 'AYU_IOS27_SCENE_TRAIT_REPAIR_v2' submodules/Display/Source/NativeWindowHostView.swift
           ! grep -q 'else if #available(iOS 12.0' submodules/Display/Source/NativeWindowHostView.swift
           grep -q 'AYU_FINAL_THEME_WINDOW_APPEARANCE_v2' submodules/TelegramUI/Sources/SharedAccountContext.swift
@@ -128,7 +129,8 @@ jobs:
           git diff --exit-code HEAD -- submodules/TabBarUI/Sources/TabBarContollerNode.swift
           git diff --exit-code HEAD -- submodules/TelegramPresentationData/Sources/PresentationData.swift
           grep -q 'AYU_THEME_STATE_REPAIR_v1' submodules/TelegramUI/Sources/SharedAccountContext.swift
-          grep -q 'AYU_CLOUD_THEME_FAMILY_FALLBACK_v1' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
+          grep -q 'AYU_CLOUD_THEME_FAMILY_FALLBACK_v2' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
+          grep -q 'return values.first(where: { $0.baseTheme == .classic || $0.baseTheme == .day }) ?? values.first' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
           grep -q 'AYU_IOS27_SCENE_TRAIT_REPAIR_v2' submodules/Display/Source/NativeWindowHostView.swift
           ! grep -q 'else if #available(iOS 12.0' submodules/Display/Source/NativeWindowHostView.swift
           grep -q 'AYU_FINAL_THEME_WINDOW_APPEARANCE_v2' submodules/TelegramUI/Sources/SharedAccountContext.swift

@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 STATE_MARK = "AYU_THEME_STATE_REPAIR_v1"
-CLOUD_MARK = "AYU_CLOUD_THEME_FAMILY_FALLBACK_v1"
+CLOUD_MARK = "AYU_CLOUD_THEME_FAMILY_FALLBACK_v2"
 TRAIT_MARK = "AYU_IOS27_SCENE_TRAIT_REPAIR_v2"
 APPEARANCE_MARK = "AYU_FINAL_THEME_WINDOW_APPEARANCE_v2"
 PREFERRED_NIGHT_MARK = "AYU_PREFERRED_NIGHT_THEME_PERSISTENCE_v2"
@@ -34,7 +34,7 @@ def main() -> int:
     make = make_path.read_text(encoding="utf-8")
     if CLOUD_MARK not in make:
         import_anchor = "import TelegramCore\n\n"
-        helper = f'''import TelegramCore\n\n// {CLOUD_MARK}\nprivate func ayuCompatibleCloudThemeSettings(_ values: [TelegramThemeSettings]?, baseTheme: TelegramBaseTheme?) -> TelegramThemeSettings? {{\n    guard let values, !values.isEmpty else {{\n        return nil\n    }}\n    guard let baseTheme else {{\n        return values.first\n    }}\n    if let exact = values.first(where: {{ $0.baseTheme == baseTheme }}) {{\n        return exact\n    }}\n    let wantsDark = baseTheme == .night || baseTheme == .tinted\n    if let compatible = values.first(where: {{ value in\n        if wantsDark {{\n            return value.baseTheme == .night || value.baseTheme == .tinted\n        }} else {{\n            return value.baseTheme == .classic || value.baseTheme == .day\n        }}\n    }}) {{\n        return compatible\n    }}\n    // Never apply a palette from the opposite luminance family.\n    return nil\n}}\n\n'''
+        helper = f'''import TelegramCore\n\n// {CLOUD_MARK}\nprivate func ayuCompatibleCloudThemeSettings(_ values: [TelegramThemeSettings]?, baseTheme: TelegramBaseTheme?) -> TelegramThemeSettings? {{\n    guard let values, !values.isEmpty else {{\n        return nil\n    }}\n    guard let baseTheme else {{\n        // PresentationData passes nil for the normal (non Auto-Night) path when\n        // no preferred variant has been persisted. That path is light, so never\n        // let an arbitrarily ordered dark record provide its foreground colors.\n        return values.first(where: {{ $0.baseTheme == .classic || $0.baseTheme == .day }}) ?? values.first\n    }}\n    if let exact = values.first(where: {{ $0.baseTheme == baseTheme }}) {{\n        return exact\n    }}\n    let wantsDark = baseTheme == .night || baseTheme == .tinted\n    if let compatible = values.first(where: {{ value in\n        if wantsDark {{\n            return value.baseTheme == .night || value.baseTheme == .tinted\n        }} else {{\n            return value.baseTheme == .classic || value.baseTheme == .day\n        }}\n    }}) {{\n        return compatible\n    }}\n    // Never apply a palette from the opposite luminance family.\n    return nil\n}}\n\n'''
         make = one(make, import_anchor, helper, "cloud theme compatibility helper")
 
         old_cloud = '''public func makePresentationTheme(cloudTheme: TelegramTheme, baseTheme: TelegramBaseTheme? = nil) -> PresentationTheme? {\n    let settings: TelegramThemeSettings?\n    if let exactSettings = cloudTheme.settings?.first(where: { $0.baseTheme == baseTheme }) {\n        settings = exactSettings\n    } else if let firstSettings = cloudTheme.settings?.first {\n        settings = firstSettings\n    } else {\n        settings = nil\n    }\n'''
@@ -104,6 +104,8 @@ def main() -> int:
         raise RuntimeError("cloud theme family fallback missing")
     if make_verify.count("ayuCompatibleCloudThemeSettings(") < 3:
         raise RuntimeError("not all cloud theme call sites use family fallback")
+    if "return values.first(where: { $0.baseTheme == .classic || $0.baseTheme == .day }) ?? values.first" not in make_verify:
+        raise RuntimeError("nil preferred base theme does not default to the light family")
 
     shared_verify = shared_path.read_text(encoding="utf-8")
     if STATE_MARK not in shared_verify:
