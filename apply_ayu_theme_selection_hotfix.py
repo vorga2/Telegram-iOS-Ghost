@@ -4,250 +4,14 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-MARK = "AYU_THEME_VARIANT_SELECTION_v0_3"
-NATIVE_MARK = "AYU_NATIVE_APPEARANCE_SYNC_v0_3"
+MARK = "AYU_EFFECTIVE_THEME_VARIANT_v0_3"
 
 
-def one(text: str, old: str, new: str, label: str) -> str:
+def replace_exact(text: str, old: str, new: str, expected: int, label: str) -> str:
     count = text.count(old)
-    if count != 1:
-        raise RuntimeError(f"{label}: expected 1 anchor, found {count}")
-    return text.replace(old, new, 1)
-
-
-def patch_theme_settings_controller(root: Path) -> None:
-    path = root / "submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift"
-    text = path.read_text(encoding="utf-8")
-    if MARK in text:
-        return
-
-    old_start = '''    selectThemeImpl = { theme in
-        guard let presentationTheme = makePresentationTheme(mediaBox: context.sharedContext.accountManager.mediaBox, themeReference: theme) else {
-            return
-        }
-        
-        let autoNightModeTriggered = context.sharedContext.currentPresentationData.with { $0 }.autoNightModeTriggered
-'''
-    new_start = '''    selectThemeImpl = { theme in
-        // AYU_THEME_VARIANT_SELECTION_v0_3
-        // Resolve a multi-variant cloud theme against the appearance Telegram is
-        // already using. This runs only when the user selects a theme: no timers,
-        // polling, display-link callbacks or per-frame work are introduced.
-        let ayuCurrentPresentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let ayuThemeSelectionIsDark = ayuCurrentPresentationData.theme.overallDarkAppearance
-        let ayuSelectedBaseTheme: TelegramBaseTheme?
-        if case let .cloud(info) = theme {
-            ayuSelectedBaseTheme = info.theme.settings?.first(where: { settings in
-                if ayuThemeSelectionIsDark {
-                    return settings.baseTheme == .night || settings.baseTheme == .tinted
-                } else {
-                    return settings.baseTheme == .classic || settings.baseTheme == .day
-                }
-            })?.baseTheme ?? info.theme.settings?.first?.baseTheme
-        } else {
-            ayuSelectedBaseTheme = nil
-        }
-        guard let presentationTheme = makePresentationTheme(mediaBox: context.sharedContext.accountManager.mediaBox, themeReference: theme, baseTheme: ayuSelectedBaseTheme) else {
-            return
-        }
-        
-        let autoNightModeTriggered = ayuCurrentPresentationData.autoNightModeTriggered
-'''
-    text = one(text, old_start, new_start, "ThemeSettings selectTheme appearance anchor")
-
-    old_current = '''            if case let .cloud(info) = currentTheme, let settings = info.theme.settings?.first {
-                currentThemeBaseIndex = PresentationThemeReference.builtin(PresentationBuiltinThemeReference(baseTheme: settings.baseTheme)).index
-            } else {
-'''
-    new_current = '''            if case let .cloud(info) = currentTheme, let settings = info.theme.settings?.first(where: { settings in
-                if ayuThemeSelectionIsDark {
-                    return settings.baseTheme == .night || settings.baseTheme == .tinted
-                } else {
-                    return settings.baseTheme == .classic || settings.baseTheme == .day
-                }
-            }) ?? info.theme.settings?.first {
-                currentThemeBaseIndex = PresentationThemeReference.builtin(PresentationBuiltinThemeReference(baseTheme: settings.baseTheme)).index
-            } else {
-'''
-    text = one(text, old_current, new_current, "ThemeSettings current cloud base anchor")
-
-    old_selected = '''                if let settings = info.theme.settings?.first {
-                    baseThemeIndex = PresentationThemeReference.builtin(PresentationBuiltinThemeReference(baseTheme: settings.baseTheme)).index
-                    updatedThemeBaseIndex = baseThemeIndex
-                }
-'''
-    new_selected = '''                if let settings = info.theme.settings?.first(where: { settings in
-                    if ayuThemeSelectionIsDark {
-                        return settings.baseTheme == .night || settings.baseTheme == .tinted
-                    } else {
-                        return settings.baseTheme == .classic || settings.baseTheme == .day
-                    }
-                }) ?? info.theme.settings?.first {
-                    baseThemeIndex = PresentationThemeReference.builtin(PresentationBuiltinThemeReference(baseTheme: settings.baseTheme)).index
-                    updatedThemeBaseIndex = baseThemeIndex
-                }
-'''
-    text = one(text, old_selected, new_selected, "ThemeSettings selected cloud base anchor")
-
-    transaction_anchor = '''            let _ = updatePresentationThemeSettingsInteractively(accountManager: context.sharedContext.accountManager, { current in
-                var updatedAutomaticThemeSwitchSetting = current.automaticThemeSwitchSetting
-'''
-    transaction_new = '''            let _ = updatePresentationThemeSettingsInteractively(accountManager: context.sharedContext.accountManager, { current in
-                var updatedThemePreferredBaseTheme = current.themePreferredBaseTheme
-                if let ayuSelectedBaseTheme = ayuSelectedBaseTheme {
-                    updatedThemePreferredBaseTheme[updatedTheme.index] = ayuSelectedBaseTheme
-                }
-                var updatedAutomaticThemeSwitchSetting = current.automaticThemeSwitchSetting
-'''
-    text = one(text, transaction_anchor, transaction_new, "ThemeSettings preferred base persistence anchor")
-
-    return_anchor = '''                return current.withUpdatedTheme(updatedTheme).withUpdatedAutomaticThemeSwitchSetting(updatedAutomaticThemeSwitchSetting)
-'''
-    return_new = '''                return current.withUpdatedTheme(updatedTheme).withUpdatedThemePreferredBaseTheme(updatedThemePreferredBaseTheme).withUpdatedAutomaticThemeSwitchSetting(updatedAutomaticThemeSwitchSetting)
-'''
-    text = one(text, return_anchor, return_new, "ThemeSettings preferred base return anchor")
-
-    path.write_text(text, encoding="utf-8")
-
-
-def patch_theme_picker_controller(root: Path) -> None:
-    path = root / "submodules/SettingsUI/Sources/ThemePickerController.swift"
-    text = path.read_text(encoding="utf-8")
-    if MARK in text:
-        return
-
-    old_start = '''    selectThemeImpl = { baseTheme, theme, preset in
-        guard let presentationTheme = makePresentationTheme(mediaBox: context.sharedContext.accountManager.mediaBox, themeReference: theme) else {
-            return
-        }
-        
-        let autoNightModeTriggered = context.sharedContext.currentPresentationData.with { $0 }.autoNightModeTriggered
-'''
-    new_start = '''    selectThemeImpl = { baseTheme, theme, preset in
-        // AYU_THEME_VARIANT_SELECTION_v0_3
-        // Preserve Telegram's normal theme machinery; only resolve the cloud theme's
-        // base variant at the moment of selection so light and dark colors cannot mix.
-        let ayuCurrentPresentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let ayuThemeSelectionIsDark = ayuCurrentPresentationData.theme.overallDarkAppearance
-        let ayuSelectedBaseTheme: TelegramBaseTheme?
-        if let baseTheme = baseTheme {
-            ayuSelectedBaseTheme = baseTheme
-        } else if case let .cloud(info) = theme {
-            ayuSelectedBaseTheme = info.theme.settings?.first(where: { settings in
-                if ayuThemeSelectionIsDark {
-                    return settings.baseTheme == .night || settings.baseTheme == .tinted
-                } else {
-                    return settings.baseTheme == .classic || settings.baseTheme == .day
-                }
-            })?.baseTheme ?? info.theme.settings?.first?.baseTheme
-        } else {
-            ayuSelectedBaseTheme = nil
-        }
-        guard let presentationTheme = makePresentationTheme(mediaBox: context.sharedContext.accountManager.mediaBox, themeReference: theme, baseTheme: ayuSelectedBaseTheme) else {
-            return
-        }
-        
-        let autoNightModeTriggered = ayuCurrentPresentationData.autoNightModeTriggered
-'''
-    text = one(text, old_start, new_start, "ThemePicker selectTheme appearance anchor")
-
-    old_current = '''            if case let .cloud(info) = currentTheme, let settings = info.theme.settings?.first {
-                currentThemeBaseIndex = PresentationThemeReference.builtin(PresentationBuiltinThemeReference(baseTheme: settings.baseTheme)).index
-            } else {
-'''
-    new_current = '''            if case let .cloud(info) = currentTheme, let settings = info.theme.settings?.first(where: { settings in
-                if ayuThemeSelectionIsDark {
-                    return settings.baseTheme == .night || settings.baseTheme == .tinted
-                } else {
-                    return settings.baseTheme == .classic || settings.baseTheme == .day
-                }
-            }) ?? info.theme.settings?.first {
-                currentThemeBaseIndex = PresentationThemeReference.builtin(PresentationBuiltinThemeReference(baseTheme: settings.baseTheme)).index
-            } else {
-'''
-    text = one(text, old_current, new_current, "ThemePicker current cloud base anchor")
-
-    old_base = '''                if let baseTheme = baseTheme, let settings = info.theme.settings?.first(where: { $0.baseTheme == baseTheme }) {
-                    updatedBaseTheme = baseTheme
-                    baseThemeIndex = PresentationThemeReference.builtin(PresentationBuiltinThemeReference(baseTheme: settings.baseTheme)).index
-                    updatedThemeBaseIndex = baseThemeIndex
-                } else if let settings = info.theme.settings?.first {
-'''
-    new_base = '''                if let ayuSelectedBaseTheme = ayuSelectedBaseTheme, let settings = info.theme.settings?.first(where: { $0.baseTheme == ayuSelectedBaseTheme }) {
-                    updatedBaseTheme = ayuSelectedBaseTheme
-                    baseThemeIndex = PresentationThemeReference.builtin(PresentationBuiltinThemeReference(baseTheme: settings.baseTheme)).index
-                    updatedThemeBaseIndex = baseThemeIndex
-                } else if let settings = info.theme.settings?.first {
-'''
-    text = one(text, old_base, new_base, "ThemePicker selected cloud base anchor")
-
-    path.write_text(text, encoding="utf-8")
-
-
-def patch_native_appearance_sync(root: Path) -> None:
-    path = root / "submodules/TelegramUI/Sources/SharedAccountContext.swift"
-    text = path.read_text(encoding="utf-8")
-    if NATIVE_MARK in text:
-        return
-
-    old_update = '''                    /*if #available(iOS 13.0, *) {
-                        let userInterfaceStyle: UIUserInterfaceStyle
-                        if strongSelf.currentPresentationData.with({ $0 }).theme.overallDarkAppearance {
-                            userInterfaceStyle = .dark
-                        } else {
-                            userInterfaceStyle = .light
-                        }
-                        if let eventView = strongSelf.mainWindow?.hostView.eventView, eventView.overrideUserInterfaceStyle != userInterfaceStyle {
-                            eventView.overrideUserInterfaceStyle = userInterfaceStyle
-                        }
-                    }*/
-'''
-    new_update = '''                    // AYU_NATIVE_APPEARANCE_SYNC_v0_3
-                    // Native Liquid Glass/UIKit controls must use the same appearance
-                    // as Telegram's PresentationTheme. This runs only when that theme
-                    // changes; there is no frame-loop, timer or polling cost.
-                    if #available(iOS 13.0, *) {
-                        let userInterfaceStyle: UIUserInterfaceStyle
-                        if strongSelf.currentPresentationData.with({ $0 }).theme.overallDarkAppearance {
-                            userInterfaceStyle = .dark
-                        } else {
-                            userInterfaceStyle = .light
-                        }
-                        if let eventView = strongSelf.mainWindow?.hostView.eventView, eventView.overrideUserInterfaceStyle != userInterfaceStyle {
-                            eventView.overrideUserInterfaceStyle = userInterfaceStyle
-                        }
-                    }
-'''
-    text = one(text, old_update, new_update, "native appearance theme-update sync")
-
-    old_initial = '''        /*if #available(iOS 13.0, *) {
-            let userInterfaceStyle: UIUserInterfaceStyle
-            if self.currentPresentationData.with({ $0 }).theme.overallDarkAppearance {
-                userInterfaceStyle = .dark
-            } else {
-                userInterfaceStyle = .light
-            }
-            if let eventView = self.mainWindow?.hostView.eventView, eventView.overrideUserInterfaceStyle != userInterfaceStyle {
-                eventView.overrideUserInterfaceStyle = userInterfaceStyle
-            }
-        }*/
-'''
-    new_initial = '''        // Keep native glass correct immediately after launch as well.
-        if #available(iOS 13.0, *) {
-            let userInterfaceStyle: UIUserInterfaceStyle
-            if self.currentPresentationData.with({ $0 }).theme.overallDarkAppearance {
-                userInterfaceStyle = .dark
-            } else {
-                userInterfaceStyle = .light
-            }
-            if let eventView = self.mainWindow?.hostView.eventView, eventView.overrideUserInterfaceStyle != userInterfaceStyle {
-                eventView.overrideUserInterfaceStyle = userInterfaceStyle
-            }
-        }
-'''
-    text = one(text, old_initial, new_initial, "native appearance initial sync")
-
-    path.write_text(text, encoding="utf-8")
+    if count != expected:
+        raise RuntimeError(f"{label}: expected {expected} anchors, found {count}")
+    return text.replace(old, new)
 
 
 def main() -> int:
@@ -256,10 +20,67 @@ def main() -> int:
         return 2
 
     root = Path(sys.argv[1]).resolve()
-    patch_theme_settings_controller(root)
-    patch_theme_picker_controller(root)
-    patch_native_appearance_sync(root)
-    print("[ayu-theme-selection] cloud variant + native glass appearance synced; no polling/frame work")
+    path = root / "submodules/TelegramPresentationData/Sources/PresentationData.swift"
+    if not path.exists():
+        raise RuntimeError(f"missing PresentationData source: {path}")
+
+    text = path.read_text(encoding="utf-8")
+    if MARK in text:
+        print("[ayu-theme] central effective-theme variant fix already installed")
+        return 0
+
+    # Telegram already owns light/dark switching. The bug here is narrower: when a
+    # cloud theme has multiple base variants and the saved preferred variant belongs
+    # to the opposite appearance, preferredBaseTheme becomes nil. makePresentationTheme
+    # then falls back to settings.first, which may be the dark variant while the app
+    # is light (or vice versa). Resolve the correct cloud variant here, at the single
+    # central PresentationData calculation point. No controller refresh, timers,
+    # polling, display links or per-frame work.
+    old_dark = '''            if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.night, .tinted].contains(baseTheme) {
+                preferredBaseTheme = baseTheme
+            } else {
+                preferredBaseTheme = .night
+            }
+'''
+    new_dark = '''            // AYU_EFFECTIVE_THEME_VARIANT_v0_3
+            if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.night, .tinted].contains(baseTheme) {
+                preferredBaseTheme = baseTheme
+            } else if case let .cloud(info) = effectiveTheme, let baseTheme = info.theme.settings?.first(where: { settings in
+                return settings.baseTheme == .night || settings.baseTheme == .tinted
+            })?.baseTheme {
+                preferredBaseTheme = baseTheme
+            } else {
+                preferredBaseTheme = .night
+            }
+'''
+    text = replace_exact(text, old_dark, new_dark, 2, "central dark cloud variant")
+
+    old_light = '''            if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.classic, .day].contains(baseTheme) {
+                preferredBaseTheme = baseTheme
+            }
+'''
+    new_light = '''            // AYU_EFFECTIVE_THEME_VARIANT_v0_3
+            if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.classic, .day].contains(baseTheme) {
+                preferredBaseTheme = baseTheme
+            } else if case let .cloud(info) = effectiveTheme, let baseTheme = info.theme.settings?.first(where: { settings in
+                return settings.baseTheme == .classic || settings.baseTheme == .day
+            })?.baseTheme {
+                preferredBaseTheme = baseTheme
+            }
+'''
+    text = replace_exact(text, old_light, new_light, 2, "central light cloud variant")
+
+    path.write_text(text, encoding="utf-8")
+
+    verify = path.read_text(encoding="utf-8")
+    if verify.count(MARK) != 4:
+        raise RuntimeError("central theme marker coverage is incomplete")
+    if verify.count("settings.baseTheme == .classic || settings.baseTheme == .day") < 2:
+        raise RuntimeError("light cloud variant resolution missing")
+    if verify.count("settings.baseTheme == .night || settings.baseTheme == .tinted") < 2:
+        raise RuntimeError("dark cloud variant resolution missing")
+
+    print("[ayu-theme] central cloud light/dark variant resolved; Telegram theme pipeline otherwise stock")
     return 0
 
 
