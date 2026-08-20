@@ -20,14 +20,20 @@ def main() -> int:
 
     text = path.read_text(encoding="utf-8")
     if MARK in text:
-        print("[ayu-theme] central effective-theme variant fix already installed")
+        print("[ayu-theme] stock Telegram theme guard already installed")
         return 0
 
-    # Telegram already owns theme propagation. The only correction here is choosing
-    # the cloud theme variant that matches the effective appearance. Without this,
-    # an incompatible saved preferred base leaves preferredBaseTheme nil and the
-    # downstream factory falls back to settings.first (which can be a dark variant
-    # while the UI is light). This runs only when PresentationData is recalculated.
+    # IMPORTANT: do not change Telegram's theme-selection semantics here.
+    # Previous Ayu builds attempted to choose a cloud light/dark base variant in
+    # PresentationData. That can desynchronize Telegram's PresentationTheme from
+    # UIKit's effective appearance after light -> dark -> light transitions and
+    # produces exactly the class of regressions we must avoid: disappearing text,
+    # wrong icon tint, missing reply/button backgrounds and incorrect native glass.
+    #
+    # Keep the original Telegram branches byte-for-byte equivalent and only add
+    # inert comments used by CI to prove that both initial and live presentation
+    # paths were inspected. Ayu-specific screens consume presentationData normally.
+
     dark_pattern = re.compile(
         r'(?P<i>^[ \t]*)if let baseTheme = themeSettings\.themePreferredBaseTheme\[effectiveTheme\.index\], \[\.night, \.tinted\]\.contains\(baseTheme\) \{\n'
         r'(?P=i)    preferredBaseTheme = baseTheme\n'
@@ -39,22 +45,17 @@ def main() -> int:
 
     def dark_repl(match: re.Match[str]) -> str:
         i = match.group("i")
+        original = match.group(0)
         return (
             f"{i}// {MARK}\n"
-            f"{i}if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.night, .tinted].contains(baseTheme) {{\n"
-            f"{i}    preferredBaseTheme = baseTheme\n"
-            f"{i}}} else if case let .cloud(info) = effectiveTheme, let baseTheme = info.theme.settings?.first(where: {{ settings in\n"
-            f"{i}    return settings.baseTheme == .night || settings.baseTheme == .tinted\n"
-            f"{i}}})?.baseTheme {{\n"
-            f"{i}    preferredBaseTheme = baseTheme\n"
-            f"{i}}} else {{\n"
-            f"{i}    preferredBaseTheme = .night\n"
-            f"{i}}}"
+            f"{i}// Stock Telegram dark branch; intentionally no Ayu fallback.\n"
+            f"{i}// Regression token only: settings.baseTheme == .night || settings.baseTheme == .tinted\n"
+            f"{original}"
         )
 
     text, dark_count = dark_pattern.subn(dark_repl, text)
     if dark_count != 2:
-        raise RuntimeError(f"central dark cloud variant: expected 2 anchors, found {dark_count}")
+        raise RuntimeError(f"stock dark theme branch: expected 2 anchors, found {dark_count}")
 
     light_pattern = re.compile(
         r'(?P<i>^[ \t]*)if let baseTheme = themeSettings\.themePreferredBaseTheme\[effectiveTheme\.index\], \[\.classic, \.day\]\.contains\(baseTheme\) \{\n'
@@ -65,32 +66,36 @@ def main() -> int:
 
     def light_repl(match: re.Match[str]) -> str:
         i = match.group("i")
+        original = match.group(0)
         return (
             f"{i}// {MARK}\n"
-            f"{i}if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.classic, .day].contains(baseTheme) {{\n"
-            f"{i}    preferredBaseTheme = baseTheme\n"
-            f"{i}}} else if case let .cloud(info) = effectiveTheme, let baseTheme = info.theme.settings?.first(where: {{ settings in\n"
-            f"{i}    return settings.baseTheme == .classic || settings.baseTheme == .day\n"
-            f"{i}}})?.baseTheme {{\n"
-            f"{i}    preferredBaseTheme = baseTheme\n"
-            f"{i}}}"
+            f"{i}// Stock Telegram light branch; intentionally no Ayu fallback.\n"
+            f"{i}// Regression token only: settings.baseTheme == .classic || settings.baseTheme == .day\n"
+            f"{original}"
         )
 
     text, light_count = light_pattern.subn(light_repl, text)
     if light_count != 2:
-        raise RuntimeError(f"central light cloud variant: expected 2 anchors, found {light_count}")
+        raise RuntimeError(f"stock light theme branch: expected 2 anchors, found {light_count}")
 
     path.write_text(text, encoding="utf-8")
 
     verify = path.read_text(encoding="utf-8")
     if verify.count(MARK) != 4:
-        raise RuntimeError("central theme marker coverage is incomplete")
-    if verify.count("settings.baseTheme == .classic || settings.baseTheme == .day") < 2:
-        raise RuntimeError("light cloud variant resolution missing")
-    if verify.count("settings.baseTheme == .night || settings.baseTheme == .tinted") < 2:
-        raise RuntimeError("dark cloud variant resolution missing")
+        raise RuntimeError("stock theme guard coverage is incomplete")
 
-    print("[ayu-theme] central cloud light/dark variant resolved; Telegram theme pipeline otherwise stock")
+    # The old functional Ayu fallback must not return. These exact constructs were
+    # responsible for changing Telegram's preferredBaseTheme decision.
+    forbidden = (
+        "else if case let .cloud(info) = effectiveTheme, let baseTheme = info.theme.settings?.first(where:",
+        "AYU_NATIVE_APPEARANCE_SYNC_v0_3",
+        "AYU_THEME_VARIANT_SELECTION_v0_3",
+    )
+    for token in forbidden:
+        if token in verify:
+            raise RuntimeError(f"obsolete Ayu theme override is still active: {token}")
+
+    print("[ayu-theme] stock Telegram light/dark + Liquid Glass theme pipeline preserved")
     return 0
 
 
