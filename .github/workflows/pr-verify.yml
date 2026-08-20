@@ -1,4 +1,4 @@
-name: Ayu Ghost-only Theme Repair IPA
+name: Ayu Ghost-only Theme Repair V2 IPA
 
 on:
   pull_request:
@@ -56,7 +56,10 @@ jobs:
 
           grep -q 'AYU_THEME_STATE_REPAIR_v1' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'AYU_CLOUD_THEME_FAMILY_FALLBACK_v1' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
-          grep -q 'AYU_IOS27_TRAIT_REPAIR_v1' submodules/Display/Source/NativeWindowHostView.swift
+          grep -q 'AYU_IOS27_SCENE_TRAIT_REPAIR_v2' submodules/Display/Source/NativeWindowHostView.swift
+          grep -q 'AYU_FINAL_THEME_WINDOW_APPEARANCE_v2' submodules/TelegramUI/Sources/SharedAccountContext.swift
+          grep -q 'AYU_PREFERRED_NIGHT_THEME_PERSISTENCE_v2' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
+          ! grep -q 'return current.withUpdatedTheme(updatedTheme).withUpdatedAutomaticThemeSwitchSetting(updatedAutomaticThemeSwitchSetting)' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
           grep -q 'theme: .builtin(.dayClassic)' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'automaticThemeSwitchSetting: AutomaticThemeSwitchSetting(force: false, trigger: .system, theme: .builtin(.night))' submodules/TelegramUI/Sources/SharedAccountContext.swift
           echo '=== GHOST-ONLY THEME REPAIR VERIFY SUCCESS ==='
@@ -125,7 +128,9 @@ jobs:
           git diff --exit-code HEAD -- submodules/TelegramPresentationData/Sources/PresentationData.swift
           grep -q 'AYU_THEME_STATE_REPAIR_v1' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'AYU_CLOUD_THEME_FAMILY_FALLBACK_v1' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
-          grep -q 'AYU_IOS27_TRAIT_REPAIR_v1' submodules/Display/Source/NativeWindowHostView.swift
+          grep -q 'AYU_IOS27_SCENE_TRAIT_REPAIR_v2' submodules/Display/Source/NativeWindowHostView.swift
+          grep -q 'AYU_FINAL_THEME_WINDOW_APPEARANCE_v2' submodules/TelegramUI/Sources/SharedAccountContext.swift
+          grep -q 'AYU_PREFERRED_NIGHT_THEME_PERSISTENCE_v2' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
       - name: Create build configuration
         shell: bash
         run: |
@@ -176,12 +181,12 @@ jobs:
           set -euo pipefail
           IPA="$RUNNER_TEMP/output/Telegram.ipa"
           test -f "$IPA"
-          mv "$IPA" "$RUNNER_TEMP/output/AyuGram-GhostOnly-ThemeRepairV1.ipa"
-          echo "path=$RUNNER_TEMP/output/AyuGram-GhostOnly-ThemeRepairV1.ipa" >> "$GITHUB_OUTPUT"
+          mv "$IPA" "$RUNNER_TEMP/output/AyuGram-GhostOnly-ThemeRepairV2.ipa"
+          echo "path=$RUNNER_TEMP/output/AyuGram-GhostOnly-ThemeRepairV2.ipa" >> "$GITHUB_OUTPUT"
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: AyuGram-GhostOnly-ThemeRepairV1-IPA
+          name: AyuGram-GhostOnly-ThemeRepairV2-IPA
           path: ${{ steps.ipa.outputs.path }}
           compression-level: 0
           if-no-files-found: error
