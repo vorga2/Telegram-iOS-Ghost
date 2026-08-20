@@ -1,11 +1,11 @@
-name: Ayu Ghost-only Theme Isolation IPA
+name: Ayu Ghost-only Theme Repair IPA
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
 concurrency:
-  group: ayu-ghost-isolation-${{ github.event.pull_request.number }}
+  group: ayu-theme-repair-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
@@ -17,11 +17,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Verify Ghost-only patch
+      - name: Verify Ghost-only theme repair
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile apply_ayu_ghost_only.py apply_ayu_branding_only.py
+          python3 -m py_compile apply_ayu_ghost_only.py apply_ayu_branding_only.py apply_ayu_theme_repair.py
           REF="$(tr -d '[:space:]' < telegram-ref.txt)"
           ROOT="$RUNNER_TEMP/Telegram-iOS"
           git init "$ROOT"
@@ -31,11 +31,13 @@ jobs:
           git checkout --detach FETCH_HEAD
           python3 "$GITHUB_WORKSPACE/apply_ayu_ghost_only.py" "$ROOT"
           python3 "$GITHUB_WORKSPACE/apply_ayu_branding_only.py" "$ROOT"
+          python3 "$GITHUB_WORKSPACE/apply_ayu_theme_repair.py" "$ROOT"
 
           RUNTIME="submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift"
           SETTINGS="submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift"
           ! grep -Eqi 'deleted|удал[её]н|spy|history|archive' "$RUNTIME" "$SETTINGS"
 
+          # Deleted/message render paths must still be stock Telegram.
           for path in \
             submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift \
             submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/StringForMessageTimestampStatus.swift \
@@ -44,20 +46,24 @@ jobs:
             submodules/TelegramUI/Components/Chat/ChatMessageReplyInfoNode/Sources/ChatMessageReplyInfoNode.swift \
             submodules/TelegramUI/Sources/ChatPinnedMessageTitlePanelNode.swift \
             submodules/TelegramUI/Components/PeerInfo/PeerInfoVisualMediaPaneNode/Sources/PeerInfoGiftsPaneNode.swift \
-            submodules/TelegramUI/Sources/SharedAccountContext.swift \
             submodules/TelegramUI/Components/LiquidLens/Sources/LiquidLensView.swift \
             submodules/TelegramUI/Components/TabBarComponent/Sources/TabBarComponent.swift \
             submodules/TabBarUI/Sources/TabBarContollerNode.swift \
-            submodules/Display/Source/NativeWindowHostView.swift \
             submodules/TelegramPresentationData/Sources/PresentationData.swift
           do
             git diff --exit-code HEAD -- "$path"
           done
-          echo '=== GHOST-ONLY THEME ISOLATION VERIFY SUCCESS ==='
+
+          grep -q 'AYU_THEME_STATE_REPAIR_v1' submodules/TelegramUI/Sources/SharedAccountContext.swift
+          grep -q 'AYU_CLOUD_THEME_FAMILY_FALLBACK_v1' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
+          grep -q 'AYU_IOS27_TRAIT_REPAIR_v1' submodules/Display/Source/NativeWindowHostView.swift
+          grep -q 'theme: .builtin(.dayClassic)' submodules/TelegramUI/Sources/SharedAccountContext.swift
+          grep -q 'automaticThemeSwitchSetting: AutomaticThemeSwitchSetting(force: false, trigger: .system, theme: .builtin(.night))' submodules/TelegramUI/Sources/SharedAccountContext.swift
+          echo '=== GHOST-ONLY THEME REPAIR VERIFY SUCCESS ==='
 
   build_ipa:
     needs: verify
-    if: "${{ startsWith(github.event.pull_request.title, 'CI: build Ayu GhostOnly') }}"
+    if: "${{ startsWith(github.event.pull_request.title, 'CI: build Ayu ThemeRepair') }}"
     runs-on: macos-26
     timeout-minutes: 360
     env:
@@ -96,25 +102,30 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/telegram-bazel-cache
-          key: telegram-ios-ghostonly-${{ steps.telegram-source.outputs.ref }}-${{ github.run_id }}
+          key: telegram-ios-themerepair-${{ steps.telegram-source.outputs.ref }}-${{ github.run_id }}
           restore-keys: |
+            telegram-ios-ghostonly-${{ steps.telegram-source.outputs.ref }}-
             telegram-ios-bazel-v030-macos26-xcode262-${{ steps.telegram-source.outputs.ref }}-
       - name: Apply Ghost-only Ayu patch
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_ghost_only.py" "$RUNNER_TEMP/Telegram-iOS"
       - name: Apply AyuGram branding only
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_branding_only.py" "$RUNNER_TEMP/Telegram-iOS"
-      - name: Assert stock theme and deleted paths
+      - name: Apply theme state and custom-theme repair
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_theme_repair.py" "$RUNNER_TEMP/Telegram-iOS"
+      - name: Assert deleted render paths stay stock
         shell: bash
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/Telegram-iOS"
           git diff --exit-code HEAD -- submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift
-          git diff --exit-code HEAD -- submodules/TelegramUI/Sources/SharedAccountContext.swift
+          git diff --exit-code HEAD -- submodules/TelegramUI/Components/Chat/ChatMessageReplyInfoNode/Sources/ChatMessageReplyInfoNode.swift
           git diff --exit-code HEAD -- submodules/TelegramUI/Components/LiquidLens/Sources/LiquidLensView.swift
           git diff --exit-code HEAD -- submodules/TelegramUI/Components/TabBarComponent/Sources/TabBarComponent.swift
           git diff --exit-code HEAD -- submodules/TabBarUI/Sources/TabBarContollerNode.swift
-          git diff --exit-code HEAD -- submodules/Display/Source/NativeWindowHostView.swift
-          ! grep -Eqi 'deleted|удал[её]н|spy|history|archive' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
+          git diff --exit-code HEAD -- submodules/TelegramPresentationData/Sources/PresentationData.swift
+          grep -q 'AYU_THEME_STATE_REPAIR_v1' submodules/TelegramUI/Sources/SharedAccountContext.swift
+          grep -q 'AYU_CLOUD_THEME_FAMILY_FALLBACK_v1' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
+          grep -q 'AYU_IOS27_TRAIT_REPAIR_v1' submodules/Display/Source/NativeWindowHostView.swift
       - name: Create build configuration
         shell: bash
         run: |
@@ -165,12 +176,12 @@ jobs:
           set -euo pipefail
           IPA="$RUNNER_TEMP/output/Telegram.ipa"
           test -f "$IPA"
-          mv "$IPA" "$RUNNER_TEMP/output/AyuGram-GhostOnly-ThemeIsolation.ipa"
-          echo "path=$RUNNER_TEMP/output/AyuGram-GhostOnly-ThemeIsolation.ipa" >> "$GITHUB_OUTPUT"
+          mv "$IPA" "$RUNNER_TEMP/output/AyuGram-GhostOnly-ThemeRepairV1.ipa"
+          echo "path=$RUNNER_TEMP/output/AyuGram-GhostOnly-ThemeRepairV1.ipa" >> "$GITHUB_OUTPUT"
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: AyuGram-GhostOnly-ThemeIsolation-IPA
+          name: AyuGram-GhostOnly-ThemeRepairV1-IPA
           path: ${{ steps.ipa.outputs.path }}
           compression-level: 0
           if-no-files-found: error
@@ -180,4 +191,4 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/telegram-bazel-cache
-          key: telegram-ios-ghostonly-${{ steps.telegram-source.outputs.ref }}-${{ github.run_id }}
+          key: telegram-ios-themerepair-${{ steps.telegram-source.outputs.ref }}-${{ github.run_id }}
