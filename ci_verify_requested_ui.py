@@ -42,9 +42,6 @@ def main() -> None:
     manager = (telegram / "submodules/TelegramCore/Sources/State/AccountStateManager.swift").read_text(encoding="utf-8")
     require("AYU_SPY_HISTORY_MENU_v0_3" in manager, "edit-history query helper missing")
     require("SELECT edited_at, previous_text FROM edit_history" in manager, "edit-history query missing")
-
-    # Edit history is captured from Telegram's canonical mutation replay so raw
-    # updates, getDifference and channel sync all take the same path.
     require("AYU_CANONICAL_EDIT_HISTORY_v0_3" in manager, "canonical edit-history hook missing")
     require("case let .EditMessage(messageId, updatedMessage)" in manager, "canonical EditMessage operation not captured")
     require("currentMessage.flags.contains(.Incoming)" in manager, "edit history is not limited to interlocutor messages")
@@ -58,17 +55,11 @@ def main() -> None:
     require("ayuRefreshPreservedDeletedMessages(updates)" in add_updates, "raw deleted refresh was lost")
     require("case .updateEditMessage, .updateEditChannelMessage" not in add_updates, "old raw-only edit interception still active")
 
-    # Live deleted restyle is event-driven only: Atomic state first, one Postbox
-    # identity mutation next, disk persistence on a background queue.
     stable_refresh = "UInt32(bitPattern: currentMessage.id.id) ^ 0xA5A5A5A5"
     require(manager.count(stable_refresh) >= 2, "one-shot live deleted stable-id refresh missing")
     require("AYU_DELETED_STABLE_REFRESH_v0_3" in manager, "live deleted refresh marker missing")
     require("AYU_DELETED_LOW_LATENCY_v0_3" in manager, "low-latency raw delete path missing")
 
-    # Startup/reconnect differences and channel available-min cleanup must not
-    # remove messages already retained by Ayu. The pinned Telegram source has one
-    # canonical replay switch, so verify the two delete cases semantically instead
-    # of assuming duplicated replay blocks.
     state_utils = (telegram / "submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift").read_text(encoding="utf-8")
     require(state_utils.count("AYU_DELETED_CANONICAL_RETENTION_v0_3") >= 2, "canonical deleted retention is incomplete")
     require(state_utils.count("AYU_DELETED_RANGE_RETENTION_v0_3") >= 1, "channel min-range retention is incomplete")
@@ -110,15 +101,14 @@ def main() -> None:
     bubble = (telegram / "submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift").read_text(encoding="utf-8")
     require("let ayuDeletedVisible = AyuRuntimeSettings.isDeleted(item.message.id)" in bubble, "deleted styling is still viewer-dependent")
     require("!AyuRuntimeSettings.isInDeletedViewer(item.message.id)" not in bubble, "deleted viewer still disables background styling")
-    require("AYU_DELETED_DARK_THEME_BACKDROP_v0_3" in bubble, "dark-theme Telegram bubble fallback missing")
-    require("AYU_DELETED_SUBTLE_THEME_ALPHA_v0_3" in bubble, "subtle Telegram-theme deleted alpha missing")
+    require("AYU_DELETED_DARK_THEME_BACKDROP_v0_3" in bubble, "dark-theme Telegram bubble path missing")
+    require("AYU_DELETED_TELEGRAM_NEUTRAL_BUBBLE_v0_3" in bubble, "Night-theme neutral Telegram bubble fix missing")
     require("let ayuDeletedAlpha = CGFloat(AyuRuntimeSettings.deletedMessageAlpha)" in bubble, "deleted alpha value missing")
-    require("let ayuTelegramDeletedAlpha = min(ayuDeletedAlpha, CGFloat(0.35))" in bubble, "Telegram-theme background is not capped at 0.35")
-    require("backgroundNode.ayuCustomImageAlpha = ayuDeletedVisible && !ayuTelegramThemeDeleted ? ayuDeletedAlpha : nil" in bubble, "Telegram-theme image path still bakes alpha before layer compositing")
-    require("if strongSelf.backgroundNode.hasImage" in bubble, "active Telegram bubble source is not detected")
-    require("strongSelf.backgroundNode.alpha = ayuTelegramDeletedAlpha" in bubble, "stock image bubble is not faded at the final layer")
-    require("strongSelf.backgroundWallpaperNode.alpha = ayuTelegramDeletedAlpha" in bubble, "stock wallpaper bubble is not faded at the final layer")
-    require("backgroundWallpaperNode.alpha = ayuDeletedVisible ? 0.0 : 1.0" not in bubble, "dark-theme Telegram bubble can still be hidden completely")
+    require("backgroundNode.ayuCustomImageAlpha = ayuDeletedVisible && !ayuTelegramThemeDeleted ? ayuDeletedAlpha : nil" in bubble, "Telegram-theme bubble still bakes transparency into wallpaper-tinted artwork")
+    require("let ayuBackgroundMaskMode = ayuTelegramThemeDeleted ? false" in bubble, "Telegram-theme deleted bubble still uses wallpaper/backdrop tint")
+    require("strongSelf.backgroundNode.alpha = ayuDeletedAlpha" in bubble, "Telegram-theme static bubble does not use configured deleted alpha")
+    require("strongSelf.backgroundWallpaperNode.alpha = 0.0" in bubble, "wallpaper-tinted backdrop is still visible behind Telegram-theme deleted bubble")
+    require("CGFloat(0.35)" not in bubble and "ayuTelegramDeletedAlpha" not in bubble, "obsolete 0.35 opacity workaround is still active")
     require("ayuDeletedWholeItem" not in bubble, "whole bubble item alpha leaked back into bubble renderer")
 
     deleted_viewer = (telegram / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuDeletedMessagesController.swift").read_text(encoding="utf-8")
