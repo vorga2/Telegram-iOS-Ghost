@@ -5,13 +5,6 @@ import sys
 from pathlib import Path
 
 from apply_ayu_branding_hotfix import main as apply_branding_main
-from apply_ayu_theme_selection_hotfix import (
-    MARK as THEME_SELECTION_MARK,
-    NATIVE_MARK as NATIVE_APPEARANCE_MARK,
-    patch_native_appearance_sync,
-    patch_theme_picker_controller,
-    patch_theme_settings_controller,
-)
 
 MARK = "AYU_DELETED_NORMAL_STOCK_ALPHA_v0_3"
 
@@ -81,22 +74,12 @@ def main() -> int:
     else:
         print("[ayu-deleted-alpha] already installed")
 
-    # Dedicated theme compatibility fixes. They only run on selection/theme-change
-    # events and simply make Telegram/native UIKit agree on the same appearance.
-    patch_theme_settings_controller(root)
-    patch_theme_picker_controller(root)
-    patch_native_appearance_sync(root)
+    # Intentionally DO NOT patch ThemeSettingsController, ThemePickerController,
+    # SharedAccountContext, presentationData, UIKit appearance or Liquid Glass.
+    # Telegram owns the complete theme pipeline. Ayu only changes deleted-bubble alpha.
+    print("[ayu-theme] untouched; Telegram owns theme/light/dark appearance")
 
-    settings_source = (root / "submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift").read_text(encoding="utf-8")
-    picker_source = (root / "submodules/SettingsUI/Sources/ThemePickerController.swift").read_text(encoding="utf-8")
-    shared_context_source = (root / "submodules/TelegramUI/Sources/SharedAccountContext.swift").read_text(encoding="utf-8")
-    if THEME_SELECTION_MARK not in settings_source or THEME_SELECTION_MARK not in picker_source:
-        raise RuntimeError("cloud theme light/dark variant selection patch is incomplete")
-    if NATIVE_APPEARANCE_MARK not in shared_context_source:
-        raise RuntimeError("native UIKit/Liquid Glass appearance sync patch is missing")
-    print("[ayu-theme-selection] cloud variant and native glass appearance synced; event-only")
-
-    # Build-time app display name only; no runtime rendering/theme work.
+    # Build-time branding + CallKit provider display name.
     saved_argv = sys.argv
     try:
         sys.argv = [str(Path(__file__).with_name("apply_ayu_branding_hotfix.py")), str(root)]
