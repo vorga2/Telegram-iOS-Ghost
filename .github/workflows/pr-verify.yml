@@ -1,11 +1,13 @@
 name: Ayu Ghost-only Diagnostic IPA
 
 on:
+  push:
+    branches: [ayu-v03-deleted-ui-read]
   pull_request:
     types: [opened, synchronize, reopened]
 
 concurrency:
-  group: ayu-v03-pr-${{ github.event.pull_request.number }}
+  group: ayu-ghost-only-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -38,12 +40,10 @@ jobs:
 
           RUNTIME="submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift"
           SETTINGS="submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift"
-
           grep -q 'public enum AyuRuntimeSettings' "$RUNTIME"
           grep -q 'РЕЖИМ ПРИЗРАКА' "$SETTINGS"
           ! grep -Eqi 'deleted|удал[её]н|spy|history|archive' "$RUNTIME" "$SETTINGS"
 
-          # These files are the deleted/theme render hot paths. They must remain byte-for-byte stock.
           for path in \
             submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift \
             submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/StringForMessageTimestampStatus.swift \
@@ -67,7 +67,6 @@ jobs:
 
   build_ipa:
     needs: verify
-    if: "${{ startsWith(github.event.pull_request.title, 'CI: build Ayu v0.3 IPA') }}"
     runs-on: macos-26
     timeout-minutes: 360
     env:
@@ -95,7 +94,6 @@ jobs:
         run: |
           set -euo pipefail
           REF="$(tr -d '[:space:]' < telegram-ref.txt)"
-          test -n "$REF" || { echo "telegram-ref.txt is empty"; exit 1; }
           cd "$RUNNER_TEMP"
           rm -rf Telegram-iOS
           git init Telegram-iOS
@@ -105,7 +103,7 @@ jobs:
           git checkout --detach FETCH_HEAD
           git submodule update --init --recursive --depth 1 --jobs 8
           ACTUAL_REF="$(git rev-parse HEAD)"
-          test "$ACTUAL_REF" = "$REF" || { echo "Pinned Telegram ref mismatch: $ACTUAL_REF != $REF"; exit 1; }
+          test "$ACTUAL_REF" = "$REF"
           echo "ref=$ACTUAL_REF" >> "$GITHUB_OUTPUT"
 
       - name: Restore Bazel disk cache
