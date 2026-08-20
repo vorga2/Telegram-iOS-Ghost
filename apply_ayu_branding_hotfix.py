@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import py_compile
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -23,6 +25,15 @@ def main() -> int:
         return 2
 
     root = Path(sys.argv[1]).resolve()
+
+    # Apply the theme correctness patch as part of the final build-time hotfix.
+    # This was previously present in the repo but never executed by the IPA workflow.
+    # It only reacts to actual presentation/theme changes; no timer/display-link/polling.
+    theme_script = Path(__file__).resolve().with_name("apply_ayu_theme_selection_hotfix.py")
+    if not theme_script.exists():
+        raise RuntimeError(f"missing theme hotfix: {theme_script}")
+    py_compile.compile(str(theme_script), doraise=True)
+    subprocess.run([sys.executable, str(theme_script), str(root)], check=True)
 
     # The real Bazel host app uses :TelegramInfoPlist, not :AppNameInfoPlist.
     # Patch both CFBundleDisplayName and CFBundleName in that MAIN app plist.
@@ -142,7 +153,15 @@ plist_fragment(
     if 'CXProviderConfiguration(localizedName: "AyuGram")' not in callkit_path.read_text(encoding="utf-8"):
         raise RuntimeError("AyuGram CallKit display name was not installed")
 
-    print("[ayu-branding] MAIN TelegramInfoPlist display/name + extensions + CallKit = AyuGram")
+    shared = (root / "submodules/TelegramUI/Sources/SharedAccountContext.swift").read_text(encoding="utf-8")
+    theme_settings = (root / "submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift").read_text(encoding="utf-8")
+    theme_picker = (root / "submodules/SettingsUI/Sources/ThemePickerController.swift").read_text(encoding="utf-8")
+    if "AYU_NATIVE_APPEARANCE_SYNC_v0_3" not in shared:
+        raise RuntimeError("native UIKit/light-dark appearance sync was not installed")
+    if "AYU_THEME_VARIANT_SELECTION_v0_3" not in theme_settings or "AYU_THEME_VARIANT_SELECTION_v0_3" not in theme_picker:
+        raise RuntimeError("cloud theme light/dark variant selection was not installed")
+
+    print("[ayu-final] theme light/dark sync + MAIN AyuGram plist + CallKit branding")
     return 0
 
 
