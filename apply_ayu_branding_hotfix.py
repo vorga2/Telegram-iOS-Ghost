@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 MARK = "AYU_APP_DISPLAY_NAME_v0_3"
+CALLKIT_MARK = "AYU_CALLKIT_DISPLAY_NAME_v0_3"
 
 
 def one(text: str, old: str, new: str, label: str) -> str:
@@ -22,8 +23,7 @@ def main() -> int:
 
     root = Path(sys.argv[1]).resolve()
 
-    # Bazel's generated application/extension plist fragment is the authoritative
-    # display name for the build used by this repository.
+    # App display name used by the built IPA / SpringBoard metadata.
     build_path = root / "Telegram/BUILD"
     build = build_path.read_text(encoding="utf-8")
     if MARK not in build:
@@ -47,7 +47,7 @@ plist_fragment(
         build = one(build, old, new, "Bazel app display name")
         build_path.write_text(build, encoding="utf-8")
 
-    # Keep the project plists consistent for any fallback/project-style build.
+    # Keep fallback/project-style plists consistent.
     for relative in ("Telegram/Telegram-iOS/InfoBazel.plist", "Telegram/Telegram-iOS/Info.plist"):
         path = root / relative
         if not path.exists():
@@ -58,8 +58,7 @@ plist_fragment(
             text = text.replace(anchor, "\t<key>CFBundleDisplayName</key>\n\t<string>AyuGram</string>", 1)
             path.write_text(text, encoding="utf-8")
 
-    # A localized InfoPlist.strings can override CFBundleDisplayName. Normalize only
-    # that key and leave every permission/localization string untouched.
+    # A localized InfoPlist.strings can override CFBundleDisplayName.
     for path in (root / "Telegram/Telegram-iOS").glob("*.lproj/InfoPlist.strings"):
         text = path.read_text(encoding="utf-8")
         updated, count = re.subn(
@@ -72,10 +71,28 @@ plist_fragment(
         if count:
             path.write_text(updated, encoding="utf-8")
 
+    # The blue ongoing-call/status pill does NOT use CFBundleDisplayName here.
+    # Telegram hardcodes its CallKit provider name, so patch that exact source too.
+    callkit_path = root / "submodules/TelegramCallsUI/Sources/CallKitIntegration.swift"
+    if not callkit_path.exists():
+        raise RuntimeError(f"missing CallKit source: {callkit_path}")
+    callkit = callkit_path.read_text(encoding="utf-8")
+    if CALLKIT_MARK not in callkit:
+        old = '        let providerConfiguration = CXProviderConfiguration(localizedName: "Telegram")\n'
+        new = (
+            f'        // {CALLKIT_MARK}\n'
+            '        let providerConfiguration = CXProviderConfiguration(localizedName: "AyuGram")\n'
+        )
+        callkit = one(callkit, old, new, "CallKit provider display name")
+        callkit_path.write_text(callkit, encoding="utf-8")
+
     if "<string>AyuGram</string>" not in build_path.read_text(encoding="utf-8"):
         raise RuntimeError("AyuGram Bazel display name was not installed")
+    callkit_verify = callkit_path.read_text(encoding="utf-8")
+    if 'CXProviderConfiguration(localizedName: "AyuGram")' not in callkit_verify:
+        raise RuntimeError("AyuGram CallKit display name was not installed")
 
-    print("[ayu-branding] CFBundleDisplayName = AyuGram")
+    print("[ayu-branding] CFBundleDisplayName + CallKit name = AyuGram")
     return 0
 
 
