@@ -4,7 +4,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-MARK = "AYU_DELETED_SUBTLE_THEME_ALPHA_v0_3"
+MARK = "AYU_DELETED_TELEGRAM_NEUTRAL_BUBBLE_v0_3"
 
 
 def one(text: str, old: str, new: str, label: str) -> str:
@@ -26,22 +26,31 @@ def main() -> int:
 
     text = path.read_text(encoding="utf-8")
     if MARK in text:
-        print("[ayu-deleted-subtle-alpha] already installed")
+        print("[ayu-deleted-telegram-theme] already installed")
         return 0
 
-    # Telegram-theme bubbles should use layer opacity, not a pre-rendered alpha image.
-    # This keeps the actual theme color/gradient and avoids visually over-dense dark
-    # bubbles. Custom Ayu colors continue using the cached image-alpha path.
+    # For the Telegram-theme option, do not bake alpha into the image. We want the
+    # exact static theme bubble artwork and then one final 0.5 layer-alpha operation.
+    # Custom Ayu colors keep their existing cached image-alpha path.
     old_image_alpha = "        strongSelf.backgroundNode.ayuCustomImageAlpha = ayuDeletedVisible ? ayuDeletedAlpha : nil\n"
     new_image_alpha = "        strongSelf.backgroundNode.ayuCustomImageAlpha = ayuDeletedVisible && !ayuTelegramThemeDeleted ? ayuDeletedAlpha : nil\n"
     text = one(text, old_image_alpha, new_image_alpha, "Telegram-theme image alpha bypass")
 
+    # Night/wallpaper themes can render their bubble through WallpaperBubbleBackgroundNode.
+    # That backdrop inherits the wallpaper tint (purple in the built-in Night theme), so
+    # making it transparent only exposes even more of the colored wallpaper. For a deleted
+    # message using 'Telegram theme', force Telegram's normal static theme bubble image
+    # instead. This preserves the theme's own neutral incoming/outgoing bubble color.
+    old_mask = "        let ayuBackgroundMaskMode = ayuDeletedBackgroundColor == nil ? strongSelf.backgroundMaskMode : false\n"
+    new_mask = '''        // AYU_DELETED_TELEGRAM_NEUTRAL_BUBBLE_v0_3\n        let ayuBackgroundMaskMode = ayuTelegramThemeDeleted ? false : (ayuDeletedBackgroundColor == nil ? strongSelf.backgroundMaskMode : false)\n'''
+    text = one(text, old_mask, new_mask, "Telegram-theme static bubble source")
+
     old_block = '''        // AYU_DELETED_DARK_THEME_BACKDROP_v0_3\n        // If Telegram produced a normal bubble image, its alpha is already baked and\n        // cached by ChatMessageBackground. If the image is nil, the theme is using\n        // the wallpaper/backdrop bubble path; fade that one layer instead. Never hide\n        // both layers, and never change text/media/status opacity.\n        if ayuTelegramThemeDeleted && !strongSelf.backgroundNode.hasImage {\n            strongSelf.backgroundWallpaperNode.alpha = ayuDeletedAlpha\n        } else if ayuDeletedVisible && ayuDeletedBackgroundColor != nil {\n            strongSelf.backgroundWallpaperNode.alpha = 0.0\n        } else {\n            strongSelf.backgroundWallpaperNode.alpha = 1.0\n        }\n'''
-    new_block = '''        // AYU_DELETED_DARK_THEME_BACKDROP_v0_3\n        // AYU_DELETED_SUBTLE_THEME_ALPHA_v0_3\n        // Telegram's dark bubble/backdrop is visually much denser than a flat color.\n        // Cap only the stock Telegram-theme background at 0.35. The message contents\n        // stay fully opaque. Whichever stock source Telegram actually uses gets the\n        // alpha exactly once; the inactive fill source is hidden.\n        let ayuTelegramDeletedAlpha = min(ayuDeletedAlpha, CGFloat(0.35))\n        if ayuTelegramThemeDeleted {\n            if strongSelf.backgroundNode.hasImage {\n                strongSelf.backgroundNode.alpha = ayuTelegramDeletedAlpha\n                strongSelf.backgroundWallpaperNode.alpha = 0.0\n            } else {\n                strongSelf.backgroundNode.alpha = 1.0\n                strongSelf.backgroundWallpaperNode.alpha = ayuTelegramDeletedAlpha\n            }\n        } else if ayuDeletedVisible && ayuDeletedBackgroundColor != nil {\n            strongSelf.backgroundNode.alpha = 1.0\n            strongSelf.backgroundWallpaperNode.alpha = 0.0\n        } else {\n            strongSelf.backgroundNode.alpha = 1.0\n            strongSelf.backgroundWallpaperNode.alpha = 1.0\n        }\n'''
-    text = one(text, old_block, new_block, "Telegram-theme active background alpha")
+    new_block = '''        // AYU_DELETED_DARK_THEME_BACKDROP_v0_3\n        // For Telegram-theme deleted messages the mask mode above is deliberately\n        // disabled, so backgroundNode contains Telegram's static theme bubble instead\n        // of the wallpaper-tinted backdrop. Apply the requested deleted alpha once.\n        if ayuTelegramThemeDeleted {\n            strongSelf.backgroundNode.alpha = ayuDeletedAlpha\n            strongSelf.backgroundWallpaperNode.alpha = 0.0\n        } else if ayuDeletedVisible && ayuDeletedBackgroundColor != nil {\n            strongSelf.backgroundNode.alpha = 1.0\n            strongSelf.backgroundWallpaperNode.alpha = 0.0\n        } else {\n            strongSelf.backgroundNode.alpha = 1.0\n            strongSelf.backgroundWallpaperNode.alpha = 1.0\n        }\n'''
+    text = one(text, old_block, new_block, "Telegram-theme neutral bubble rendering")
 
     path.write_text(text, encoding="utf-8")
-    print("[ayu-deleted-subtle-alpha] Telegram-theme deleted bubble capped at 0.35; active stock layer only")
+    print("[ayu-deleted-telegram-theme] Night/wallpaper tint bypassed; stock theme bubble at configured alpha")
     return 0
 
 
