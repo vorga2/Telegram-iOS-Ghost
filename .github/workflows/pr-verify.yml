@@ -57,6 +57,7 @@ jobs:
           grep -q 'AYU_THEME_STATE_REPAIR_v1' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'AYU_CLOUD_THEME_FAMILY_FALLBACK_v1' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
           grep -q 'AYU_IOS27_SCENE_TRAIT_REPAIR_v2' submodules/Display/Source/NativeWindowHostView.swift
+          ! grep -q 'else if #available(iOS 12.0' submodules/Display/Source/NativeWindowHostView.swift
           grep -q 'AYU_FINAL_THEME_WINDOW_APPEARANCE_v2' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'AYU_PREFERRED_NIGHT_THEME_PERSISTENCE_v2' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
           ! grep -q 'return current.withUpdatedTheme(updatedTheme).withUpdatedAutomaticThemeSwitchSetting(updatedAutomaticThemeSwitchSetting)' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
@@ -129,6 +130,7 @@ jobs:
           grep -q 'AYU_THEME_STATE_REPAIR_v1' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'AYU_CLOUD_THEME_FAMILY_FALLBACK_v1' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
           grep -q 'AYU_IOS27_SCENE_TRAIT_REPAIR_v2' submodules/Display/Source/NativeWindowHostView.swift
+          ! grep -q 'else if #available(iOS 12.0' submodules/Display/Source/NativeWindowHostView.swift
           grep -q 'AYU_FINAL_THEME_WINDOW_APPEARANCE_v2' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'AYU_PREFERRED_NIGHT_THEME_PERSISTENCE_v2' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
       - name: Create build configuration

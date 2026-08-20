@@ -66,7 +66,7 @@ def main() -> int:
     window = window_path.read_text(encoding="utf-8")
     if TRAIT_MARK not in window:
         old = '''    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {\n        if #available(iOS 12.0, *) {\n            self._systemUserInterfaceStyle.set(WindowUserInterfaceStyle(style: self.traitCollection.userInterfaceStyle))\n        }\n    }\n'''
-        new = f'''    // {TRAIT_MARK}\n    @available(iOS 13.0, *)\n    private func ayuPublishSystemUserInterfaceStyle(_ style: UIUserInterfaceStyle) {{\n        if style != .unspecified {{\n            self._systemUserInterfaceStyle.set(WindowUserInterfaceStyle(style: style))\n        }}\n    }}\n\n    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {{\n        super.traitCollectionDidChange(previousTraitCollection)\n        if #available(iOS 13.0, *) {{\n            if let windowScene = self.viewIfLoaded?.window?.windowScene {{\n                self.ayuPublishSystemUserInterfaceStyle(windowScene.traitCollection.userInterfaceStyle)\n            }}\n        }} else if #available(iOS 12.0, *) {{\n            self._systemUserInterfaceStyle.set(WindowUserInterfaceStyle(style: self.traitCollection.userInterfaceStyle))\n        }}\n    }}\n\n    @available(iOS 13.0, *)\n    func windowScene(\n        _ windowScene: UIWindowScene,\n        didUpdate previousCoordinateSpace: UICoordinateSpace,\n        interfaceOrientation previousInterfaceOrientation: UIInterfaceOrientation,\n        traitCollection previousTraitCollection: UITraitCollection\n    ) {{\n        self.ayuPublishSystemUserInterfaceStyle(windowScene.traitCollection.userInterfaceStyle)\n    }}\n'''
+        new = f'''    // {TRAIT_MARK}\n    @available(iOS 13.0, *)\n    private func ayuPublishSystemUserInterfaceStyle(_ style: UIUserInterfaceStyle) {{\n        if style != .unspecified {{\n            self._systemUserInterfaceStyle.set(WindowUserInterfaceStyle(style: style))\n        }}\n    }}\n\n    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {{\n        super.traitCollectionDidChange(previousTraitCollection)\n        if #available(iOS 13.0, *), let windowScene = self.viewIfLoaded?.window?.windowScene {{\n            self.ayuPublishSystemUserInterfaceStyle(windowScene.traitCollection.userInterfaceStyle)\n        }}\n    }}\n\n    @available(iOS 13.0, *)\n    func windowScene(\n        _ windowScene: UIWindowScene,\n        didUpdate previousCoordinateSpace: UICoordinateSpace,\n        interfaceOrientation previousInterfaceOrientation: UIInterfaceOrientation,\n        traitCollection previousTraitCollection: UITraitCollection\n    ) {{\n        self.ayuPublishSystemUserInterfaceStyle(windowScene.traitCollection.userInterfaceStyle)\n    }}\n'''
         window = one(window, old, new, "iOS 27 trait repair")
         window_path.write_text(window, encoding="utf-8")
 
@@ -124,6 +124,8 @@ def main() -> int:
         raise RuntimeError("trait propagation missing")
     if "ayuPublishSystemUserInterfaceStyle(windowScene.traitCollection.userInterfaceStyle)" not in window_verify:
         raise RuntimeError("system appearance is not isolated from the window override")
+    if "else if #available(iOS 12.0" in window_verify:
+        raise RuntimeError("redundant iOS availability branch breaks Swift 6 compilation")
     if "if style != .unspecified" not in window_verify:
         raise RuntimeError("transient unspecified style is not filtered")
 
