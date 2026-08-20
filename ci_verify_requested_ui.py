@@ -23,13 +23,15 @@ def main() -> None:
     correctness = workspace / "apply_ayu_runtime_correctness_hotfix.py"
     polish = workspace / "apply_ayu_ui_polish_hotfix.py"
     retention = workspace / "apply_ayu_group_retention_hotfix.py"
-    for script in (requested, correctness, polish, retention):
+    subtle = workspace / "apply_ayu_deleted_subtle_alpha_hotfix.py"
+    for script in (requested, correctness, polish, retention, subtle):
         py_compile.compile(str(script), doraise=True)
 
     subprocess.run([sys.executable, str(requested), str(telegram)], check=True)
     subprocess.run([sys.executable, str(correctness), str(telegram)], check=True)
     subprocess.run([sys.executable, str(polish), str(telegram)], check=True)
     subprocess.run([sys.executable, str(retention), str(telegram)], check=True)
+    subprocess.run([sys.executable, str(subtle), str(telegram)], check=True)
 
     runtime = (telegram / "submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift").read_text(encoding="utf-8")
     require('case .trash:\n            return "🗑️"' in runtime, "trash marker is not 🗑️")
@@ -107,12 +109,15 @@ def main() -> None:
 
     bubble = (telegram / "submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift").read_text(encoding="utf-8")
     require("let ayuDeletedVisible = AyuRuntimeSettings.isDeleted(item.message.id)" in bubble, "deleted styling is still viewer-dependent")
-    require("!AyuRuntimeSettings.isInDeletedViewer(item.message.id)" not in bubble, "deleted viewer still disables 0.5 styling")
+    require("!AyuRuntimeSettings.isInDeletedViewer(item.message.id)" not in bubble, "deleted viewer still disables background styling")
     require("AYU_DELETED_DARK_THEME_BACKDROP_v0_3" in bubble, "dark-theme Telegram bubble fallback missing")
+    require("AYU_DELETED_SUBTLE_THEME_ALPHA_v0_3" in bubble, "subtle Telegram-theme deleted alpha missing")
     require("let ayuDeletedAlpha = CGFloat(AyuRuntimeSettings.deletedMessageAlpha)" in bubble, "deleted alpha value missing")
-    require("backgroundNode.ayuCustomImageAlpha = ayuDeletedVisible ? ayuDeletedAlpha : nil" in bubble, "deleted image alpha is not cached into the stock bubble")
-    require("ayuTelegramThemeDeleted && !strongSelf.backgroundNode.hasImage" in bubble, "wallpaper-backed Telegram bubbles are not detected")
-    require("strongSelf.backgroundWallpaperNode.alpha = ayuDeletedAlpha" in bubble, "dark-theme wallpaper bubble is not faded to deleted alpha")
+    require("let ayuTelegramDeletedAlpha = min(ayuDeletedAlpha, CGFloat(0.35))" in bubble, "Telegram-theme background is not capped at 0.35")
+    require("backgroundNode.ayuCustomImageAlpha = ayuDeletedVisible && !ayuTelegramThemeDeleted ? ayuDeletedAlpha : nil" in bubble, "Telegram-theme image path still bakes alpha before layer compositing")
+    require("if strongSelf.backgroundNode.hasImage" in bubble, "active Telegram bubble source is not detected")
+    require("strongSelf.backgroundNode.alpha = ayuTelegramDeletedAlpha" in bubble, "stock image bubble is not faded at the final layer")
+    require("strongSelf.backgroundWallpaperNode.alpha = ayuTelegramDeletedAlpha" in bubble, "stock wallpaper bubble is not faded at the final layer")
     require("backgroundWallpaperNode.alpha = ayuDeletedVisible ? 0.0 : 1.0" not in bubble, "dark-theme Telegram bubble can still be hidden completely")
     require("ayuDeletedWholeItem" not in bubble, "whole bubble item alpha leaked back into bubble renderer")
 
