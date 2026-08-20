@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
 MARK = "AYU_EFFECTIVE_THEME_VARIANT_v0_3"
-
-
-def replace_exact(text: str, old: str, new: str, expected: int, label: str) -> str:
-    count = text.count(old)
-    if count != expected:
-        raise RuntimeError(f"{label}: expected {expected} anchors, found {count}")
-    return text.replace(old, new)
 
 
 def main() -> int:
@@ -29,46 +23,62 @@ def main() -> int:
         print("[ayu-theme] central effective-theme variant fix already installed")
         return 0
 
-    # Telegram already owns light/dark switching. The bug here is narrower: when a
-    # cloud theme has multiple base variants and the saved preferred variant belongs
-    # to the opposite appearance, preferredBaseTheme becomes nil. makePresentationTheme
-    # then falls back to settings.first, which may be the dark variant while the app
-    # is light (or vice versa). Resolve the correct cloud variant here, at the single
-    # central PresentationData calculation point. No controller refresh, timers,
-    # polling, display links or per-frame work.
-    old_dark = '''            if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.night, .tinted].contains(baseTheme) {
-                preferredBaseTheme = baseTheme
-            } else {
-                preferredBaseTheme = .night
-            }
-'''
-    new_dark = '''            // AYU_EFFECTIVE_THEME_VARIANT_v0_3
-            if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.night, .tinted].contains(baseTheme) {
-                preferredBaseTheme = baseTheme
-            } else if case let .cloud(info) = effectiveTheme, let baseTheme = info.theme.settings?.first(where: { settings in
-                return settings.baseTheme == .night || settings.baseTheme == .tinted
-            })?.baseTheme {
-                preferredBaseTheme = baseTheme
-            } else {
-                preferredBaseTheme = .night
-            }
-'''
-    text = replace_exact(text, old_dark, new_dark, 2, "central dark cloud variant")
+    # Telegram already owns theme propagation. The only correction here is choosing
+    # the cloud theme variant that matches the effective appearance. Without this,
+    # an incompatible saved preferred base leaves preferredBaseTheme nil and the
+    # downstream factory falls back to settings.first (which can be a dark variant
+    # while the UI is light). This runs only when PresentationData is recalculated.
+    dark_pattern = re.compile(
+        r'(?P<i>^[ \t]*)if let baseTheme = themeSettings\.themePreferredBaseTheme\[effectiveTheme\.index\], \[\.night, \.tinted\]\.contains\(baseTheme\) \{\n'
+        r'(?P=i)    preferredBaseTheme = baseTheme\n'
+        r'(?P=i)\} else \{\n'
+        r'(?P=i)    preferredBaseTheme = \.night\n'
+        r'(?P=i)\}',
+        re.MULTILINE,
+    )
 
-    old_light = '''            if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.classic, .day].contains(baseTheme) {
-                preferredBaseTheme = baseTheme
-            }
-'''
-    new_light = '''            // AYU_EFFECTIVE_THEME_VARIANT_v0_3
-            if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.classic, .day].contains(baseTheme) {
-                preferredBaseTheme = baseTheme
-            } else if case let .cloud(info) = effectiveTheme, let baseTheme = info.theme.settings?.first(where: { settings in
-                return settings.baseTheme == .classic || settings.baseTheme == .day
-            })?.baseTheme {
-                preferredBaseTheme = baseTheme
-            }
-'''
-    text = replace_exact(text, old_light, new_light, 2, "central light cloud variant")
+    def dark_repl(match: re.Match[str]) -> str:
+        i = match.group("i")
+        return (
+            f"{i}// {MARK}\n"
+            f"{i}if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.night, .tinted].contains(baseTheme) {{\n"
+            f"{i}    preferredBaseTheme = baseTheme\n"
+            f"{i}}} else if case let .cloud(info) = effectiveTheme, let baseTheme = info.theme.settings?.first(where: {{ settings in\n"
+            f"{i}    return settings.baseTheme == .night || settings.baseTheme == .tinted\n"
+            f"{i}}})?.baseTheme {{\n"
+            f"{i}    preferredBaseTheme = baseTheme\n"
+            f"{i}}} else {{\n"
+            f"{i}    preferredBaseTheme = .night\n"
+            f"{i}}}"
+        )
+
+    text, dark_count = dark_pattern.subn(dark_repl, text)
+    if dark_count != 2:
+        raise RuntimeError(f"central dark cloud variant: expected 2 anchors, found {dark_count}")
+
+    light_pattern = re.compile(
+        r'(?P<i>^[ \t]*)if let baseTheme = themeSettings\.themePreferredBaseTheme\[effectiveTheme\.index\], \[\.classic, \.day\]\.contains\(baseTheme\) \{\n'
+        r'(?P=i)    preferredBaseTheme = baseTheme\n'
+        r'(?P=i)\}',
+        re.MULTILINE,
+    )
+
+    def light_repl(match: re.Match[str]) -> str:
+        i = match.group("i")
+        return (
+            f"{i}// {MARK}\n"
+            f"{i}if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.classic, .day].contains(baseTheme) {{\n"
+            f"{i}    preferredBaseTheme = baseTheme\n"
+            f"{i}}} else if case let .cloud(info) = effectiveTheme, let baseTheme = info.theme.settings?.first(where: {{ settings in\n"
+            f"{i}    return settings.baseTheme == .classic || settings.baseTheme == .day\n"
+            f"{i}}})?.baseTheme {{\n"
+            f"{i}    preferredBaseTheme = baseTheme\n"
+            f"{i}}}"
+        )
+
+    text, light_count = light_pattern.subn(light_repl, text)
+    if light_count != 2:
+        raise RuntimeError(f"central light cloud variant: expected 2 anchors, found {light_count}")
 
     path.write_text(text, encoding="utf-8")
 
