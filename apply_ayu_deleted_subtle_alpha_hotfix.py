@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from apply_ayu_branding_hotfix import main as apply_branding_main
 from apply_ayu_theme_selection_hotfix import (
     MARK as THEME_SELECTION_MARK,
     patch_theme_picker_controller,
@@ -102,6 +103,18 @@ def main() -> int:
     if THEME_SELECTION_MARK not in settings_source or THEME_SELECTION_MARK not in picker_source:
         raise RuntimeError("cloud theme light/dark variant selection patch is incomplete")
     print("[ayu-theme-selection] current light/dark cloud variant persisted; selection-time only")
+
+    # Branding is build-time metadata only. Reuse the dedicated patcher while preserving
+    # this script's argv contract so the existing workflow does not need another step.
+    saved_argv = sys.argv
+    try:
+        sys.argv = [str(Path(__file__).with_name("apply_ayu_branding_hotfix.py")), str(root)]
+        result = apply_branding_main()
+    finally:
+        sys.argv = saved_argv
+    if result != 0:
+        raise RuntimeError(f"AyuGram branding patch failed with code {result}")
+
     return 0
 
 
