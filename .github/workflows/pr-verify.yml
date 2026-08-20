@@ -196,7 +196,7 @@ jobs:
           cd "$RUNNER_TEMP/Telegram-iOS"
           mkdir -p "$RUNNER_TEMP/output"
           python3 build-system/Make/Make.py \
-            --cacheDir="$HOME/runner/telegram-bazel-cache" \
+            --cacheDir="$HOME/telegram-bazel-cache" \
             build \
             --configurationPath=build-system/ayu-ci-configuration.json \
             --codesigningInformationPath=build-system/fake-codesigning \
