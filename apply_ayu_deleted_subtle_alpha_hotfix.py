@@ -29,6 +29,12 @@ def main() -> int:
         print("[ayu-deleted-alpha] already installed")
         return 0
 
+    # The previous polish layer used this flag to choose a special Telegram-theme
+    # rendering path. This final layer intentionally does not special-case themes,
+    # so keeping the flag would only trigger Telegram's warnings-as-errors build.
+    obsolete_flag = "        let ayuTelegramThemeDeleted = ayuDeletedVisible && ayuDeletedBackgroundColor == nil\n"
+    text = one(text, obsolete_flag, "", "obsolete Telegram-theme deleted flag")
+
     # Do not synthesize a different bubble image for deleted messages. Telegram
     # has already selected the correct light/dark/chat-theme artwork at this point.
     # We only change the final opacity of the active bubble layer.
