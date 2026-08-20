@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -46,7 +47,8 @@ def main() -> int:
         shared_path.write_text(shared, encoding="utf-8")
 
     # 2) Selected tab/category content is rendered through _UILiquidLensView on
-    # iOS 26+. Keep that private native lens on the same effective appearance.
+    # iOS 26. Keep that private native lens on the same effective appearance there;
+    # the iOS 27-specific repair below deliberately bypasses the private lens on 27+.
     lens_path = root / "submodules/TelegramUI/Components/LiquidLens/Sources/LiquidLensView.swift"
     if not lens_path.exists():
         raise RuntimeError(f"missing LiquidLensView: {lens_path}")
@@ -74,6 +76,13 @@ def main() -> int:
         chat = one(chat, live_anchor, live_new, "live root chat-list title")
         chat_path.write_text(chat, encoding="utf-8")
 
+    # 4) iOS 27 has separate Liquid Glass / trait regressions. Apply targeted
+    # runtime repairs after the generic theme bridge so the fixes compose cleanly.
+    ios27_script = Path(__file__).resolve().with_name("apply_ayu_ios27_render_fix.py")
+    if not ios27_script.exists():
+        raise RuntimeError(f"missing iOS 27 render fix: {ios27_script}")
+    subprocess.run([sys.executable, str(ios27_script), str(root)], check=True)
+
     shared_verify = shared_path.read_text(encoding="utf-8")
     if shared_verify.count(MARK) != 1:
         raise RuntimeError("native appearance marker missing")
@@ -87,14 +96,18 @@ def main() -> int:
         raise RuntimeError("LiquidLens appearance marker missing")
     if "lensView.overrideUserInterfaceStyle = style" not in lens_verify:
         raise RuntimeError("LiquidLens native style assignment missing")
+    if "AYU_IOS27_LIQUID_LENS_FALLBACK_v0_3" not in lens_verify:
+        raise RuntimeError("iOS 27 LiquidLens fallback missing")
 
     chat_verify = chat_path.read_text(encoding="utf-8")
     if chat_verify.count(CHAT_MARK) != 1:
         raise RuntimeError("visible chat-list branding marker missing")
     if 'title = "AyuGram"' not in chat_verify or 'defaultTitle = "AyuGram"' not in chat_verify:
         raise RuntimeError("AyuGram root chat-list runtime title is incomplete")
+    if "AYU_VISIBLE_CHAT_LIST_FINAL_TITLE_v0_3" not in chat_verify:
+        raise RuntimeError("final visible ChatListTitleView branding is missing")
 
-    print("[ayu-native-appearance] Telegram content + Liquid Lens track PresentationTheme; visible chat-list title is AyuGram")
+    print("[ayu-native-appearance] Telegram theme bridge + iOS 27 render repair + final AyuGram visible title installed")
     return 0
 
 
