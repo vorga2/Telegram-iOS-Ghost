@@ -154,6 +154,9 @@ jobs:
       - name: Tune Telegram-theme deleted bubble opacity
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_subtle_alpha_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
 
+      - name: Apply AyuGram branding and zero-polling call pill
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_branding_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
       - name: Create build configuration
         shell: bash
         run: |
