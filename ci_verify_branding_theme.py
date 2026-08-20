@@ -43,6 +43,11 @@ def main() -> None:
     require("AYU_CALLKIT_DISPLAY_NAME_v0_3" in callkit, "CallKit branding marker missing")
     require('CXProviderConfiguration(localizedName: "AyuGram")' in callkit, "CallKit provider still says Telegram")
 
+    chat_list = (telegram / "submodules/ChatListUI/Sources/ChatListController.swift").read_text(encoding="utf-8")
+    require("AYU_VISIBLE_CHAT_LIST_BRANDING_v0_3" in chat_list, "visible chat-list branding marker missing")
+    require('title = "AyuGram"' in chat_list, "main chat-list plain title is not AyuGram")
+    require('defaultTitle = "AyuGram"' in chat_list, "live chat-list network title is not AyuGram")
+
     presentation_data = (telegram / "submodules/TelegramPresentationData/Sources/PresentationData.swift").read_text(encoding="utf-8")
     require(presentation_data.count("AYU_EFFECTIVE_THEME_VARIANT_v0_3") == 4, "stock theme branches must cover initial + live light/dark paths")
     require("else if case let .cloud(info) = effectiveTheme" not in presentation_data, "obsolete Ayu cloud-theme fallback changed Telegram semantics")
@@ -60,12 +65,12 @@ def main() -> None:
     app_delegate = (telegram / "submodules/TelegramUI/Sources/AppDelegate.swift").read_text(encoding="utf-8")
     require("AYU_CALL_STATUS_PILL_v0_3" not in app_delegate, "obsolete app-window fake status pill is still injected")
 
-    print("=== BRANDING + NATIVE LIQUID GLASS THEME VERIFY SUCCESS ===", flush=True)
+    print("=== BRANDING + VISIBLE TITLE + NATIVE LIQUID GLASS VERIFY SUCCESS ===", flush=True)
 
 
 if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        print(f"=== BRANDING + NATIVE LIQUID GLASS THEME VERIFY FAILURE ===\n{type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        print(f"=== BRANDING + VISIBLE TITLE + NATIVE LIQUID GLASS VERIFY FAILURE ===\n{type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
         raise
