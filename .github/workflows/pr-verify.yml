@@ -2,7 +2,11 @@ name: Ayu v0.3 PR Verify + IPA
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ayu-v03-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -14,7 +18,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Verify pinned Telegram patch
-        run: python3 ci_verify_v03.py
+        run: |
+          python3 ci_verify_v03.py
+          python3 ci_verify_hotfixes.py
+          python3 ci_verify_requested_ui.py
+          python3 ci_verify_branding_theme.py
 
   build_ipa:
     needs: verify
@@ -46,7 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           REF="$(tr -d '[:space:]' < telegram-ref.txt)"
-          test -n "$REF" || { echo 'telegram-ref.txt is empty'; exit 1; }
+          test -n "$REF" || { echo "telegram-ref.txt is empty"; exit 1; }
           cd "$RUNNER_TEMP"
           rm -rf Telegram-iOS
           git init Telegram-iOS
@@ -74,6 +82,81 @@ jobs:
 
       - name: Apply Ayu profile cache
         run: python3 "$GITHUB_WORKSPACE/apply_ayu_profile_cache.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply Ayu view-once preservation
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_view_once.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply durable view-once persistence
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_view_once_durable.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply view-once burn action
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_view_once_burn.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Restore stock Telegram date and status UI
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_stock_ui_guard.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply deleted bubble background
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_background.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply real-time deleted message retention
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_realtime.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Fix one-shot manual read synchronization
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_manual_read_fix.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Read current chat on send
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_send_read.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Normalize behavior hotfix anchor
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_behavior_anchor_compat.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply behavior hotfixes
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_behavior_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Archive deleted metadata and attachments
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_archive.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Expose AyuGram Documents in Files
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_files_visibility.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Restore deleted marker and Telegram-theme background default
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_visual_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply Ghost presence immediately on toggle
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_presence_toggle_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply AyuGram category settings
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_settings_categories.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply Spy settings
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_spy_settings.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Persist Spy edit history
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_spy_edit_history.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Persist Spy read dates
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_spy_read_dates.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply Spy message Details
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_spy_details.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply requested Ayu UI/history hotfix
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_requested_ui_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Fix edit history, live deleted refresh and stock bubble alpha
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_runtime_correctness_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply Ayu UI polish and low-latency deleted refresh
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_ui_polish_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Preserve deleted messages across group resyncs
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_group_retention_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Tune Telegram-theme deleted bubble opacity
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_deleted_subtle_alpha_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
+
+      - name: Apply AyuGram branding and theme sync
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_branding_hotfix.py" "$RUNNER_TEMP/Telegram-iOS"
 
       - name: Create build configuration
         shell: bash
