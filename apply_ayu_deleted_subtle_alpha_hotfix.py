@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -74,10 +75,14 @@ def main() -> int:
     else:
         print("[ayu-deleted-alpha] already installed")
 
-    # Intentionally DO NOT patch ThemeSettingsController, ThemePickerController,
-    # SharedAccountContext, presentationData, UIKit appearance or Liquid Glass.
-    # Telegram owns the complete theme pipeline. Ayu only changes deleted-bubble alpha.
-    print("[ayu-theme] untouched; Telegram owns theme/light/dark appearance")
+    # Keep Telegram's theme calculation stock, but explicitly bridge the resulting
+    # PresentationTheme to UIKit's native Liquid Glass subtree. This is required on
+    # iOS 26/27 because Telegram can change its custom theme without changing the
+    # system appearance that UIGlassEffect would otherwise inherit.
+    native_sync = Path(__file__).resolve().with_name("apply_ayu_native_appearance_sync.py")
+    if not native_sync.exists():
+        raise RuntimeError(f"missing native appearance sync patch: {native_sync}")
+    subprocess.run([sys.executable, str(native_sync), str(root)], check=True)
 
     # Build-time branding + CallKit provider display name.
     saved_argv = sys.argv
