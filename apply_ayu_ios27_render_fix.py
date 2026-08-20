@@ -8,6 +8,7 @@ LENS_FALLBACK_MARK = "AYU_IOS27_LIQUID_LENS_FALLBACK_v0_3"
 TAB_REBUILD_MARK = "AYU_TABBAR_THEME_REBUILD_v0_3"
 TAB_IMMEDIATE_MARK = "AYU_TABBAR_THEME_IMMEDIATE_UPDATE_v0_3"
 TRAIT_MARK = "AYU_IOS27_TRAIT_SYNC_v0_3"
+PRESENTATION_ORDER_MARK = "AYU_THEME_APPEARANCE_BEFORE_LEGACY_v0_3"
 CHAT_FINAL_MARK = "AYU_VISIBLE_CHAT_LIST_FINAL_TITLE_v0_3"
 
 
@@ -71,6 +72,17 @@ def main() -> int:
         window = one(window, old, new, "Window trait synchronization")
         window_path.write_text(window, encoding="utf-8")
 
+    # The generic appearance bridge is inserted by apply_ayu_native_appearance_sync.
+    # Move it before updateLegacyTheme(): legacy/native components should resolve
+    # dynamic colors under the new trait rather than be corrected after rendering.
+    shared_path = root / "submodules/TelegramUI/Sources/SharedAccountContext.swift"
+    shared = shared_path.read_text(encoding="utf-8")
+    if PRESENTATION_ORDER_MARK not in shared:
+        old = '''                if themeUpdated {\n                    updateLegacyTheme()\n                    if #available(iOS 13.0, *) {\n                        ayuSyncNativeAppearance(view: strongSelf.mainWindow?.hostView.containerView, presentationData: next)\n                    }\n                    \n'''
+        new = f'''                if themeUpdated {{\n                    // {PRESENTATION_ORDER_MARK}\n                    if #available(iOS 13.0, *) {{\n                        ayuSyncNativeAppearance(view: strongSelf.mainWindow?.hostView.containerView, presentationData: next)\n                    }}\n                    updateLegacyTheme()\n                    \n'''
+        shared = one(shared, old, new, "appearance-before-legacy theme order")
+        shared_path.write_text(shared, encoding="utf-8")
+
     # The actual visible root title is usually ChatListTitleView (NetworkStatusTitle),
     # which sits above the plain title. Brand the final value assigned to that view.
     chat_path = root / "submodules/ChatListUI/Sources/ChatListController.swift"
@@ -105,11 +117,19 @@ def main() -> int:
     if "if style != .unspecified" not in window_verify:
         raise RuntimeError("transient unspecified appearance is not filtered")
 
+    shared_verify = shared_path.read_text(encoding="utf-8")
+    if PRESENTATION_ORDER_MARK not in shared_verify:
+        raise RuntimeError("appearance sync is not ordered before legacy theme redraw")
+    sync_index = shared_verify.find("ayuSyncNativeAppearance(view: strongSelf.mainWindow?.hostView.containerView")
+    legacy_index = shared_verify.find("updateLegacyTheme()", sync_index)
+    if sync_index < 0 or legacy_index < 0 or sync_index > legacy_index:
+        raise RuntimeError("native appearance still updates after legacy theme rendering")
+
     chat_verify = chat_path.read_text(encoding="utf-8")
     if CHAT_FINAL_MARK not in chat_verify or 'titleContent.text = "AyuGram"' not in chat_verify:
         raise RuntimeError("final visible AyuGram title override missing")
 
-    print("[ayu-ios27-render] private lens bypass + tab tint rebuild + trait sync + final visible AyuGram title installed")
+    print("[ayu-ios27-render] early trait sync + private lens bypass + tab tint rebuild + final visible AyuGram title installed")
     return 0
 
 
