@@ -28,8 +28,9 @@ def main() -> int:
 
     root = Path(sys.argv[1]).resolve()
 
-    # Resolve the cloud light/dark variant centrally in PresentationData only.
-    # Telegram still owns normal theme propagation and native glass updates.
+    # Preserve Telegram's stock theme-selection semantics. The theme helper only
+    # installs inert coverage markers; native Liquid Glass synchronization is owned
+    # by apply_ayu_native_appearance_sync.py earlier in the build chain.
     theme_script = Path(__file__).resolve().with_name("apply_ayu_theme_selection_hotfix.py")
     if not theme_script.exists():
         raise RuntimeError(f"missing theme hotfix: {theme_script}")
@@ -77,9 +78,6 @@ plist_fragment(
 '''
         build = one(build, old_ext, new_ext, "extension AppNameInfoPlist branding")
 
-    # LaunchServices/CallKit attribution may resolve an embedded bundle record.
-    # Remove the remaining literal CFBundleName=Telegram values from host/appex
-    # plist fragments while leaving Bazel target/module names untouched.
     if EXT_NAME_MARK not in build:
         build = f"# {EXT_NAME_MARK}\n" + build
         build = build.replace(
@@ -116,10 +114,6 @@ plist_fragment(
         )
         path.write_text(text, encoding="utf-8")
 
-    # CXXPCCallSource gets its name from LaunchServices' application record, not
-    # CXProviderConfiguration.localizedName. Make the localized bundle record
-    # explicit for EVERY language. Previously languages such as ru/en had no
-    # CFBundleDisplayName entry at all in InfoPlist.strings.
     localized_plists = list((root / "Telegram/Telegram-iOS").glob("*.lproj/InfoPlist.strings"))
     if not localized_plists:
         raise RuntimeError("localized InfoPlist.strings files not found")
@@ -173,17 +167,21 @@ plist_fragment(
 
     presentation_data = (root / "submodules/TelegramPresentationData/Sources/PresentationData.swift").read_text(encoding="utf-8")
     if presentation_data.count(THEME_MARK) != 4:
-        raise RuntimeError("central light/dark cloud-theme resolution is incomplete")
+        raise RuntimeError("stock theme branch coverage is incomplete")
 
     shared = (root / "submodules/TelegramUI/Sources/SharedAccountContext.swift").read_text(encoding="utf-8")
     theme_settings = (root / "submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift").read_text(encoding="utf-8")
     theme_picker = (root / "submodules/SettingsUI/Sources/ThemePickerController.swift").read_text(encoding="utf-8")
-    if "AYU_NATIVE_APPEARANCE_SYNC_v0_3" in shared:
-        raise RuntimeError("obsolete global UIKit appearance override is still active")
+    if "AYU_NATIVE_APPEARANCE_SYNC_v0_3" not in shared:
+        raise RuntimeError("native Telegram-theme to Liquid Glass appearance sync is missing")
+    if "ayuSyncNativeAppearance(view: strongSelf.mainWindow?.hostView.containerView" not in shared:
+        raise RuntimeError("live native appearance sync is not attached to app content")
+    if "ayuSyncNativeAppearance(view: strongSelf.mainWindow?.hostView.eventView" in shared:
+        raise RuntimeError("unsafe UIWindow appearance override is active")
     if "AYU_THEME_VARIANT_SELECTION_v0_3" in theme_settings or "AYU_THEME_VARIANT_SELECTION_v0_3" in theme_picker:
         raise RuntimeError("obsolete controller-level theme selection workaround is still active")
 
-    print("[ayu-final] central theme fix + localized/all-bundle AyuGram attribution")
+    print("[ayu-final] stock Telegram theme semantics + native Liquid Glass sync + AyuGram branding")
     return 0
 
 
