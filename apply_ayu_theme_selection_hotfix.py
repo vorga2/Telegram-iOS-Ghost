@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 MARK = "AYU_THEME_VARIANT_SELECTION_v0_3"
+NATIVE_MARK = "AYU_NATIVE_APPEARANCE_SYNC_v0_3"
 
 
 def one(text: str, old: str, new: str, label: str) -> str:
@@ -183,6 +184,72 @@ def patch_theme_picker_controller(root: Path) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def patch_native_appearance_sync(root: Path) -> None:
+    path = root / "submodules/TelegramUI/Sources/SharedAccountContext.swift"
+    text = path.read_text(encoding="utf-8")
+    if NATIVE_MARK in text:
+        return
+
+    old_update = '''                    /*if #available(iOS 13.0, *) {
+                        let userInterfaceStyle: UIUserInterfaceStyle
+                        if strongSelf.currentPresentationData.with({ $0 }).theme.overallDarkAppearance {
+                            userInterfaceStyle = .dark
+                        } else {
+                            userInterfaceStyle = .light
+                        }
+                        if let eventView = strongSelf.mainWindow?.hostView.eventView, eventView.overrideUserInterfaceStyle != userInterfaceStyle {
+                            eventView.overrideUserInterfaceStyle = userInterfaceStyle
+                        }
+                    }*/
+'''
+    new_update = '''                    // AYU_NATIVE_APPEARANCE_SYNC_v0_3
+                    // Native Liquid Glass/UIKit controls must use the same appearance
+                    // as Telegram's PresentationTheme. This runs only when that theme
+                    // changes; there is no frame-loop, timer or polling cost.
+                    if #available(iOS 13.0, *) {
+                        let userInterfaceStyle: UIUserInterfaceStyle
+                        if strongSelf.currentPresentationData.with({ $0 }).theme.overallDarkAppearance {
+                            userInterfaceStyle = .dark
+                        } else {
+                            userInterfaceStyle = .light
+                        }
+                        if let eventView = strongSelf.mainWindow?.hostView.eventView, eventView.overrideUserInterfaceStyle != userInterfaceStyle {
+                            eventView.overrideUserInterfaceStyle = userInterfaceStyle
+                        }
+                    }
+'''
+    text = one(text, old_update, new_update, "native appearance theme-update sync")
+
+    old_initial = '''        /*if #available(iOS 13.0, *) {
+            let userInterfaceStyle: UIUserInterfaceStyle
+            if self.currentPresentationData.with({ $0 }).theme.overallDarkAppearance {
+                userInterfaceStyle = .dark
+            } else {
+                userInterfaceStyle = .light
+            }
+            if let eventView = self.mainWindow?.hostView.eventView, eventView.overrideUserInterfaceStyle != userInterfaceStyle {
+                eventView.overrideUserInterfaceStyle = userInterfaceStyle
+            }
+        }*/
+'''
+    new_initial = '''        // Keep native glass correct immediately after launch as well.
+        if #available(iOS 13.0, *) {
+            let userInterfaceStyle: UIUserInterfaceStyle
+            if self.currentPresentationData.with({ $0 }).theme.overallDarkAppearance {
+                userInterfaceStyle = .dark
+            } else {
+                userInterfaceStyle = .light
+            }
+            if let eventView = self.mainWindow?.hostView.eventView, eventView.overrideUserInterfaceStyle != userInterfaceStyle {
+                eventView.overrideUserInterfaceStyle = userInterfaceStyle
+            }
+        }
+'''
+    text = one(text, old_initial, new_initial, "native appearance initial sync")
+
+    path.write_text(text, encoding="utf-8")
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: apply_ayu_theme_selection_hotfix.py <Telegram-iOS root>", file=sys.stderr)
@@ -191,7 +258,8 @@ def main() -> int:
     root = Path(sys.argv[1]).resolve()
     patch_theme_settings_controller(root)
     patch_theme_picker_controller(root)
-    print("[ayu-theme-selection] cloud theme light/dark variant follows current appearance; selection-time only")
+    patch_native_appearance_sync(root)
+    print("[ayu-theme-selection] cloud variant + native glass appearance synced; no polling/frame work")
     return 0
 
 
