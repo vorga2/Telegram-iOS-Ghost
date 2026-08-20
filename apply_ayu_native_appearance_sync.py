@@ -6,6 +6,7 @@ from pathlib import Path
 
 MARK = "AYU_NATIVE_APPEARANCE_SYNC_v0_3"
 LENS_MARK = "AYU_LIQUID_LENS_APPEARANCE_SYNC_v0_3"
+CHAT_MARK = "AYU_VISIBLE_CHAT_LIST_BRANDING_v0_3"
 
 
 def one(text: str, old: str, new: str, label: str) -> str:
@@ -45,18 +46,33 @@ def main() -> int:
         shared_path.write_text(shared, encoding="utf-8")
 
     # 2) Selected tab/category content is rendered through _UILiquidLensView on
-    # iOS 26+. Unlike GlassBackgroundView, stock LiquidLensView never applies the
-    # supplied isDark value to that native view. After dark -> light the lens can
-    # therefore keep dark traits and its selected icon becomes effectively invisible.
+    # iOS 26+. Keep that private native lens on the same effective appearance.
     lens_path = root / "submodules/TelegramUI/Components/LiquidLens/Sources/LiquidLensView.swift"
     if not lens_path.exists():
         raise RuntimeError(f"missing LiquidLensView: {lens_path}")
     lens = lens_path.read_text(encoding="utf-8")
     if LENS_MARK not in lens:
         lens_anchor = '''    private func update(params: Params, transition: ComponentTransition) {\n        let isFirstTime = self.params == nil\n'''
-        lens_new = '''    private func update(params: Params, transition: ComponentTransition) {\n        // AYU_LIQUID_LENS_APPEARANCE_SYNC_v0_3\n        // GlassBackgroundView already does this. Keep the private native lens on\n        // the same effective appearance so selected content uses the right tint.\n        if #available(iOS 26.0, *), let lensView = self.lensView {\n            let style: UIUserInterfaceStyle = params.isDark ? .dark : .light\n            if lensView.overrideUserInterfaceStyle != style {\n                lensView.overrideUserInterfaceStyle = style\n                lensView.setNeedsLayout()\n            }\n        }\n\n        let isFirstTime = self.params == nil\n'''
+        lens_new = '''    private func update(params: Params, transition: ComponentTransition) {\n        // AYU_LIQUID_LENS_APPEARANCE_SYNC_v0_3\n        if #available(iOS 26.0, *), let lensView = self.lensView {\n            let style: UIUserInterfaceStyle = params.isDark ? .dark : .light\n            if lensView.overrideUserInterfaceStyle != style {\n                lensView.overrideUserInterfaceStyle = style\n                lensView.setNeedsLayout()\n            }\n        }\n\n        let isFirstTime = self.params == nil\n'''
         lens = one(lens, lens_anchor, lens_new, "LiquidLens selected appearance")
         lens_path.write_text(lens, encoding="utf-8")
+
+    # 3) Main chat-list branding is rendered inside Telegram itself. Bundle/CallKit
+    # names do not affect it. Brand both the plain header path and the live network
+    # status title path, while leaving the bottom localized "Chats" tab alone.
+    chat_path = root / "submodules/ChatListUI/Sources/ChatListController.swift"
+    if not chat_path.exists():
+        raise RuntimeError(f"missing ChatListController: {chat_path}")
+    chat = chat_path.read_text(encoding="utf-8")
+    if CHAT_MARK not in chat:
+        initial_anchor = '''            if groupId == .root {\n                title = self.presentationData.strings.DialogList_Title\n            } else {\n'''
+        initial_new = '''            if groupId == .root {\n                // AYU_VISIBLE_CHAT_LIST_BRANDING_v0_3\n                title = "AyuGram"\n            } else {\n'''
+        chat = one(chat, initial_anchor, initial_new, "visible root chat-list title")
+
+        live_anchor = '''            if groupId == .root {\n                defaultTitle = presentationData.strings.DialogList_Title\n            } else {\n'''
+        live_new = '''            if groupId == .root {\n                defaultTitle = "AyuGram"\n            } else {\n'''
+        chat = one(chat, live_anchor, live_new, "live root chat-list title")
+        chat_path.write_text(chat, encoding="utf-8")
 
     shared_verify = shared_path.read_text(encoding="utf-8")
     if shared_verify.count(MARK) != 1:
@@ -72,7 +88,13 @@ def main() -> int:
     if "lensView.overrideUserInterfaceStyle = style" not in lens_verify:
         raise RuntimeError("LiquidLens native style assignment missing")
 
-    print("[ayu-native-appearance] Telegram content + selected Liquid Lens now track PresentationTheme")
+    chat_verify = chat_path.read_text(encoding="utf-8")
+    if chat_verify.count(CHAT_MARK) != 1:
+        raise RuntimeError("visible chat-list branding marker missing")
+    if 'title = "AyuGram"' not in chat_verify or 'defaultTitle = "AyuGram"' not in chat_verify:
+        raise RuntimeError("AyuGram root chat-list runtime title is incomplete")
+
+    print("[ayu-native-appearance] Telegram content + Liquid Lens track PresentationTheme; visible chat-list title is AyuGram")
     return 0
 
 
