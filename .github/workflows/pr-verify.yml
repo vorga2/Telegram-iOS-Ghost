@@ -1,8 +1,12 @@
-name: Ayu v0.3 PR Verify + IPA
+name: Ayu Ghost-only Theme Isolation IPA
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ayu-ghost-isolation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -13,40 +17,70 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Verify pinned Telegram patch
-        run: python3 ci_verify_v03.py
+      - name: Verify Ghost-only patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile apply_ayu_ghost_only.py apply_ayu_branding_only.py
+          REF="$(tr -d '[:space:]' < telegram-ref.txt)"
+          ROOT="$RUNNER_TEMP/Telegram-iOS"
+          git init "$ROOT"
+          cd "$ROOT"
+          git remote add origin https://github.com/TelegramMessenger/Telegram-iOS.git
+          git fetch --depth 1 origin "$REF"
+          git checkout --detach FETCH_HEAD
+          python3 "$GITHUB_WORKSPACE/apply_ayu_ghost_only.py" "$ROOT"
+          python3 "$GITHUB_WORKSPACE/apply_ayu_branding_only.py" "$ROOT"
+
+          RUNTIME="submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift"
+          SETTINGS="submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift"
+          ! grep -Eqi 'deleted|удал[её]н|spy|history|archive' "$RUNTIME" "$SETTINGS"
+
+          for path in \
+            submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift \
+            submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/StringForMessageTimestampStatus.swift \
+            submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/ChatMessageDateAndStatusNode.swift \
+            submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageItemImpl.swift \
+            submodules/TelegramUI/Components/Chat/ChatMessageReplyInfoNode/Sources/ChatMessageReplyInfoNode.swift \
+            submodules/TelegramUI/Sources/ChatPinnedMessageTitlePanelNode.swift \
+            submodules/TelegramUI/Components/PeerInfo/PeerInfoVisualMediaPaneNode/Sources/PeerInfoGiftsPaneNode.swift \
+            submodules/TelegramUI/Sources/SharedAccountContext.swift \
+            submodules/TelegramUI/Components/LiquidLens/Sources/LiquidLensView.swift \
+            submodules/TelegramUI/Components/TabBarComponent/Sources/TabBarComponent.swift \
+            submodules/TabBarUI/Sources/TabBarContollerNode.swift \
+            submodules/Display/Source/NativeWindowHostView.swift \
+            submodules/TelegramPresentationData/Sources/PresentationData.swift
+          do
+            git diff --exit-code HEAD -- "$path"
+          done
+          echo '=== GHOST-ONLY THEME ISOLATION VERIFY SUCCESS ==='
 
   build_ipa:
     needs: verify
-    if: "${{ startsWith(github.event.pull_request.title, 'CI: build Ayu v0.3 IPA') }}"
+    if: "${{ startsWith(github.event.pull_request.title, 'CI: build Ayu GhostOnly') }}"
     runs-on: macos-26
     timeout-minutes: 360
     env:
       TG_API_ID: ${{ secrets.TG_API_ID }}
       TG_API_HASH: ${{ secrets.TG_API_HASH }}
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Check secrets
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${TG_API_ID:-}" || { echo 'TG_API_ID missing'; exit 1; }
-          test -n "${TG_API_HASH:-}" || { echo 'TG_API_HASH missing'; exit 1; }
-
+          test -n "${TG_API_ID:-}"
+          test -n "${TG_API_HASH:-}"
       - name: Select Xcode 26.2
         run: |
           sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
           xcodebuild -version
-
       - name: Checkout pinned Telegram source
         id: telegram-source
         shell: bash
         run: |
           set -euo pipefail
           REF="$(tr -d '[:space:]' < telegram-ref.txt)"
-          test -n "$REF" || { echo 'telegram-ref.txt is empty'; exit 1; }
           cd "$RUNNER_TEMP"
           rm -rf Telegram-iOS
           git init Telegram-iOS
@@ -56,25 +90,31 @@ jobs:
           git checkout --detach FETCH_HEAD
           git submodule update --init --recursive --depth 1 --jobs 8
           ACTUAL_REF="$(git rev-parse HEAD)"
-          test "$ACTUAL_REF" = "$REF" || { echo "Pinned Telegram ref mismatch: $ACTUAL_REF != $REF"; exit 1; }
-          echo "Telegram ref: $ACTUAL_REF"
+          test "$ACTUAL_REF" = "$REF"
           echo "ref=$ACTUAL_REF" >> "$GITHUB_OUTPUT"
-
       - name: Restore Bazel disk cache
         uses: actions/cache/restore@v4
         with:
           path: ~/telegram-bazel-cache
-          key: telegram-ios-bazel-v030-macos26-xcode262-${{ steps.telegram-source.outputs.ref }}-${{ github.run_id }}
+          key: telegram-ios-ghostonly-${{ steps.telegram-source.outputs.ref }}-${{ github.run_id }}
           restore-keys: |
             telegram-ios-bazel-v030-macos26-xcode262-${{ steps.telegram-source.outputs.ref }}-
-            telegram-ios-bazel-v025-macos26-xcode262-${{ steps.telegram-source.outputs.ref }}-
-
-      - name: Apply Ayu v0.3 UI v2 patcher
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_v03_ui_v2.py" "$RUNNER_TEMP/Telegram-iOS"
-
-      - name: Apply Ayu profile cache
-        run: python3 "$GITHUB_WORKSPACE/apply_ayu_profile_cache.py" "$RUNNER_TEMP/Telegram-iOS"
-
+      - name: Apply Ghost-only Ayu patch
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_ghost_only.py" "$RUNNER_TEMP/Telegram-iOS"
+      - name: Apply AyuGram branding only
+        run: python3 "$GITHUB_WORKSPACE/apply_ayu_branding_only.py" "$RUNNER_TEMP/Telegram-iOS"
+      - name: Assert stock theme and deleted paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/Telegram-iOS"
+          git diff --exit-code HEAD -- submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift
+          git diff --exit-code HEAD -- submodules/TelegramUI/Sources/SharedAccountContext.swift
+          git diff --exit-code HEAD -- submodules/TelegramUI/Components/LiquidLens/Sources/LiquidLensView.swift
+          git diff --exit-code HEAD -- submodules/TelegramUI/Components/TabBarComponent/Sources/TabBarComponent.swift
+          git diff --exit-code HEAD -- submodules/TabBarUI/Sources/TabBarContollerNode.swift
+          git diff --exit-code HEAD -- submodules/Display/Source/NativeWindowHostView.swift
+          ! grep -Eqi 'deleted|удал[её]н|spy|history|archive' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
       - name: Create build configuration
         shell: bash
         run: |
@@ -97,7 +137,6 @@ jobs:
           }
           EOF
           python3 -m json.tool build-system/ayu-ci-configuration.json >/dev/null
-
       - name: Import fake signing certificates
         shell: bash
         run: |
@@ -105,7 +144,6 @@ jobs:
           cd "$RUNNER_TEMP/Telegram-iOS"
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
           security find-identity -v -p codesigning || true
-
       - name: Build release arm64
         shell: bash
         run: |
@@ -120,30 +158,26 @@ jobs:
             --buildNumber="$GITHUB_RUN_NUMBER" \
             --configuration=release_arm64 \
             --outputBuildArtifactsPath="$RUNNER_TEMP/output"
-
       - name: Prepare IPA
         id: ipa
         shell: bash
         run: |
           set -euo pipefail
           IPA="$RUNNER_TEMP/output/Telegram.ipa"
-          test -f "$IPA" || { find "$RUNNER_TEMP/output" -type f -print; exit 1; }
-          mv "$IPA" "$RUNNER_TEMP/output/AyuGram-iOS-v0.3.0.ipa"
-          echo "path=$RUNNER_TEMP/output/AyuGram-iOS-v0.3.0.ipa" >> "$GITHUB_OUTPUT"
-          ls -lh "$RUNNER_TEMP/output/AyuGram-iOS-v0.3.0.ipa"
-
+          test -f "$IPA"
+          mv "$IPA" "$RUNNER_TEMP/output/AyuGram-GhostOnly-ThemeIsolation.ipa"
+          echo "path=$RUNNER_TEMP/output/AyuGram-GhostOnly-ThemeIsolation.ipa" >> "$GITHUB_OUTPUT"
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: AyuGram-iOS-v0.3.0-IPA
+          name: AyuGram-GhostOnly-ThemeIsolation-IPA
           path: ${{ steps.ipa.outputs.path }}
           compression-level: 0
           if-no-files-found: error
-
       - name: Save Bazel disk cache
         if: always()
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
           path: ~/telegram-bazel-cache
-          key: telegram-ios-bazel-v030-macos26-xcode262-${{ steps.telegram-source.outputs.ref }}-${{ github.run_id }}
+          key: telegram-ios-ghostonly-${{ steps.telegram-source.outputs.ref }}-${{ github.run_id }}
