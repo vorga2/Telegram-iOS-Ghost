@@ -7,6 +7,8 @@ from pathlib import Path
 from apply_ayu_branding_hotfix import main as apply_branding_main
 from apply_ayu_theme_selection_hotfix import (
     MARK as THEME_SELECTION_MARK,
+    NATIVE_MARK as NATIVE_APPEARANCE_MARK,
+    patch_native_appearance_sync,
     patch_theme_picker_controller,
     patch_theme_settings_controller,
 )
@@ -33,24 +35,14 @@ def main() -> int:
 
     text = path.read_text(encoding="utf-8")
     if MARK not in text:
-        # The previous polish layer used this flag to choose a special Telegram-theme
-        # rendering path. This final layer intentionally does not special-case themes,
-        # so keeping the flag would only trigger Telegram's warnings-as-errors build.
         obsolete_flag = "        let ayuTelegramThemeDeleted = ayuDeletedVisible && ayuDeletedBackgroundColor == nil\n"
         text = one(text, obsolete_flag, "", "obsolete Telegram-theme deleted flag")
 
-        # Do not synthesize a different bubble image for deleted messages. Telegram
-        # has already selected the correct light/dark/chat-theme artwork at this point.
-        # We only change the final opacity of the active bubble layer.
         old_image_alpha = "        strongSelf.backgroundNode.ayuCustomImageAlpha = ayuDeletedVisible ? ayuDeletedAlpha : nil\n"
-        new_image_alpha = "        strongSelf.backgroundNode.ayuCustomImageAlpha = nil\n"
-        text = one(text, old_image_alpha, new_image_alpha, "disable baked deleted alpha")
+        text = one(text, old_image_alpha, "        strongSelf.backgroundNode.ayuCustomImageAlpha = nil\n", "disable baked deleted alpha")
 
-        # Keep Telegram's own mask/backdrop decision untouched. In particular, do not
-        # force wallpaper-backed themes into the static-image path.
         mask_anchor = "        let ayuBackgroundMaskMode = ayuDeletedBackgroundColor == nil ? strongSelf.backgroundMaskMode : false\n"
-        mask_replacement = f"        // {MARK}\n" + mask_anchor
-        text = one(text, mask_anchor, mask_replacement, "stock Telegram background mode")
+        text = one(text, mask_anchor, f"        // {MARK}\n" + mask_anchor, "stock Telegram background mode")
 
         old_block = '''        // AYU_DELETED_DARK_THEME_BACKDROP_v0_3
         // If Telegram produced a normal bubble image, its alpha is already baked and
@@ -67,9 +59,6 @@ def main() -> int:
 '''
         new_block = '''        // AYU_DELETED_DARK_THEME_BACKDROP_v0_3
         // Plain opacity only: preserve whatever bubble implementation Telegram chose.
-        // If the normal image exists, fade it and hide the inactive wallpaper layer.
-        // If Telegram chose a wallpaper-backed bubble, fade that backdrop instead.
-        // Message text, media, status, reactions and the rest of the item stay at 1.0.
         if ayuDeletedVisible {
             if ayuDeletedBackgroundColor != nil {
                 strongSelf.backgroundNode.alpha = ayuDeletedAlpha
@@ -92,20 +81,22 @@ def main() -> int:
     else:
         print("[ayu-deleted-alpha] already installed")
 
-    # Keep this logically separate from deleted rendering. The build workflow already
-    # executes this file as its final UI pass, so invoke the dedicated selection-only
-    # patcher here without adding any runtime observer or refresh loop.
+    # Dedicated theme compatibility fixes. They only run on selection/theme-change
+    # events and simply make Telegram/native UIKit agree on the same appearance.
     patch_theme_settings_controller(root)
     patch_theme_picker_controller(root)
+    patch_native_appearance_sync(root)
 
     settings_source = (root / "submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift").read_text(encoding="utf-8")
     picker_source = (root / "submodules/SettingsUI/Sources/ThemePickerController.swift").read_text(encoding="utf-8")
+    shared_context_source = (root / "submodules/TelegramUI/Sources/SharedAccountContext.swift").read_text(encoding="utf-8")
     if THEME_SELECTION_MARK not in settings_source or THEME_SELECTION_MARK not in picker_source:
         raise RuntimeError("cloud theme light/dark variant selection patch is incomplete")
-    print("[ayu-theme-selection] current light/dark cloud variant persisted; selection-time only")
+    if NATIVE_APPEARANCE_MARK not in shared_context_source:
+        raise RuntimeError("native UIKit/Liquid Glass appearance sync patch is missing")
+    print("[ayu-theme-selection] cloud variant and native glass appearance synced; event-only")
 
-    # Branding is build-time metadata only. Reuse the dedicated patcher while preserving
-    # this script's argv contract so the existing workflow does not need another step.
+    # Build-time app display name only; no runtime rendering/theme work.
     saved_argv = sys.argv
     try:
         sys.argv = [str(Path(__file__).with_name("apply_ayu_branding_hotfix.py")), str(root)]
