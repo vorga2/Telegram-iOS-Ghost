@@ -7,8 +7,7 @@ from pathlib import Path
 STATE_MARK = "AYU_THEME_STATE_REPAIR_v1"
 CLOUD_MARK = "AYU_CLOUD_THEME_FAMILY_FALLBACK_v2"
 TRAIT_MARK = "AYU_IOS27_SCENE_TRAIT_REPAIR_v2"
-APPEARANCE_MARK = "AYU_FINAL_THEME_WINDOW_APPEARANCE_v2"
-PREFERRED_NIGHT_MARK = "AYU_PREFERRED_NIGHT_THEME_PERSISTENCE_v2"
+PREFERRED_NIGHT_MARK = "AYU_SPLIT_DAY_NIGHT_THEME_SELECTION_v3"
 
 
 def one(text: str, old: str, new: str, label: str) -> str:
@@ -58,10 +57,8 @@ def main() -> int:
         shared = one(shared, anchor, replacement, "one-time theme state repair")
         shared_path.write_text(shared, encoding="utf-8")
 
-    # 3) Keep the actual iOS appearance independent from Telegram's final theme.
-    # ThemeRepair v2 overrides the app window so native iOS 27 glass uses the same
-    # light/dark palette as PresentationTheme. Reading that overridden trait back
-    # into Auto-Night would create feedback, so UIWindowScene is the system source.
+    # 3) Publish the real scene appearance for Auto-Night without overriding UIKit.
+    # Native iOS 27 Liquid Glass must remain owned by the system window hierarchy.
     window_path = root / "submodules/Display/Source/NativeWindowHostView.swift"
     window = window_path.read_text(encoding="utf-8")
     if TRAIT_MARK not in window:
@@ -70,32 +67,14 @@ def main() -> int:
         window = one(window, old, new, "iOS 27 trait repair")
         window_path.write_text(window, encoding="utf-8")
 
-    # 4) Apply the final Telegram theme to both the content subtree and UIWindow.
-    # The previous container-only bridge left window-level iOS 27 glass in a
-    # mismatched appearance, making theme-colored text and backgrounds disappear.
-    shared = shared_path.read_text(encoding="utf-8")
-    if APPEARANCE_MARK not in shared:
-        class_anchor = "public final class SharedAccountContextImpl: SharedAccountContext {\n"
-        helper = f'''// {APPEARANCE_MARK}\n@available(iOS 13.0, *)\nprivate func ayuApplyFinalThemeAppearance(containerView: UIView?, eventView: UIView?, presentationData: PresentationData) {{\n    let style: UIUserInterfaceStyle = presentationData.theme.overallDarkAppearance ? .dark : .light\n    for view in [eventView, containerView] {{\n        if let view, view.overrideUserInterfaceStyle != style {{\n            view.overrideUserInterfaceStyle = style\n            view.setNeedsLayout()\n        }}\n    }}\n}}\n\n'''
-        shared = one(shared, class_anchor, helper + class_anchor, "final theme appearance helper")
-
-        initial_anchor = '''        self._presentationData.set(presentationData)\n'''
-        initial_new = '''        self._presentationData.set(presentationData)\n        if #available(iOS 13.0, *) {\n            ayuApplyFinalThemeAppearance(\n                containerView: self.mainWindow?.hostView.containerView,\n                eventView: self.mainWindow?.hostView.eventView,\n                presentationData: initialPresentationDataAndSettings.presentationData\n            )\n        }\n'''
-        shared = one(shared, initial_anchor, initial_new, "initial final theme appearance")
-
-        live_anchor = '''                if themeUpdated {\n                    updateLegacyTheme()\n                    \n'''
-        live_new = '''                if themeUpdated {\n                    if #available(iOS 13.0, *) {\n                        ayuApplyFinalThemeAppearance(\n                            containerView: strongSelf.mainWindow?.hostView.containerView,\n                            eventView: strongSelf.mainWindow?.hostView.eventView,\n                            presentationData: next\n                        )\n                    }\n                    updateLegacyTheme()\n                    \n'''
-        shared = one(shared, live_anchor, live_new, "live final theme appearance")
-        shared_path.write_text(shared, encoding="utf-8")
-
-    # 5) Main Appearance selection must not overwrite the separately selected
-    # preferred Auto-Night theme. The Auto-Night controller remains its sole owner.
+    # 4) While Auto-Night is active, the visible picker edits its night-theme slot.
+    # Otherwise it edits the regular theme and preserves the preferred night theme.
     settings_path = root / "submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift"
     settings_controller = settings_path.read_text(encoding="utf-8")
     if PREFERRED_NIGHT_MARK not in settings_controller:
         old = '''            let _ = updatePresentationThemeSettingsInteractively(accountManager: context.sharedContext.accountManager, { current in\n                var updatedAutomaticThemeSwitchSetting = current.automaticThemeSwitchSetting\n                if case let .cloud(info) = updatedTheme, info.theme.settings?.contains(where: { $0.baseTheme == .night || $0.baseTheme == .tinted }) ?? false {\n                    updatedAutomaticThemeSwitchSetting.theme = updatedTheme\n                } else if case let .builtin(theme) = updatedTheme {\n                    if [.day, .dayClassic].contains(theme) {\n                        if updatedAutomaticThemeSwitchSetting.theme.emoticon != nil || [.builtin(.dayClassic), .builtin(.day)].contains(updatedAutomaticThemeSwitchSetting.theme.generalThemeReference) {\n                            updatedAutomaticThemeSwitchSetting.theme = .builtin(.night)\n                        }\n                    } else {\n                        updatedAutomaticThemeSwitchSetting.theme = updatedTheme\n                    }\n                }\n                return current.withUpdatedTheme(updatedTheme).withUpdatedAutomaticThemeSwitchSetting(updatedAutomaticThemeSwitchSetting)\n\n            }).start()\n'''
-        new = f'''            let _ = updatePresentationThemeSettingsInteractively(accountManager: context.sharedContext.accountManager, {{ current in\n                // {PREFERRED_NIGHT_MARK}\n                // Re-selecting a main light/dark theme must not silently replace\n                // the independent preferred theme chosen in Auto-Night.\n                return current.withUpdatedTheme(updatedTheme)\n            }}).start()\n'''
-        settings_controller = one(settings_controller, old, new, "preferred night theme persistence")
+        new = f'''            let _ = updatePresentationThemeSettingsInteractively(accountManager: context.sharedContext.accountManager, {{ current in\n                // {PREFERRED_NIGHT_MARK}\n                if autoNightModeTriggered {{\n                    var updatedAutomaticThemeSwitchSetting = current.automaticThemeSwitchSetting\n                    updatedAutomaticThemeSwitchSetting.theme = updatedTheme\n                    return current.withUpdatedAutomaticThemeSwitchSetting(updatedAutomaticThemeSwitchSetting)\n                }} else {{\n                    return current.withUpdatedTheme(updatedTheme)\n                }}\n            }}).start()\n'''
+        settings_controller = one(settings_controller, old, new, "split day/night theme selection")
         settings_path.write_text(settings_controller, encoding="utf-8")
 
     # Verify exactly the intended repair is present.
@@ -131,24 +110,22 @@ def main() -> int:
     if "if style != .unspecified" not in window_verify:
         raise RuntimeError("transient unspecified style is not filtered")
 
-    shared_verify = shared_path.read_text(encoding="utf-8")
-    if APPEARANCE_MARK not in shared_verify:
-        raise RuntimeError("final theme window appearance bridge missing")
-    if "eventView: strongSelf.mainWindow?.hostView.eventView" not in shared_verify:
-        raise RuntimeError("window-level final theme appearance missing")
-    update_index = shared_verify.find("if themeUpdated")
-    appearance_index = shared_verify.find("ayuApplyFinalThemeAppearance(", update_index)
-    legacy_index = shared_verify.find("updateLegacyTheme()", update_index)
-    if update_index < 0 or appearance_index < 0 or legacy_index < 0 or appearance_index > legacy_index:
-        raise RuntimeError("final appearance must be installed before legacy theme redraw")
+    if "ayuApplyFinalThemeAppearance" in shared_verify or "AYU_FINAL_THEME_WINDOW_APPEARANCE" in shared_verify:
+        raise RuntimeError("global window appearance override breaks native Liquid Glass")
 
     settings_verify = settings_path.read_text(encoding="utf-8")
     if PREFERRED_NIGHT_MARK not in settings_verify:
-        raise RuntimeError("preferred night theme persistence missing")
+        raise RuntimeError("split day/night theme selection missing")
+    if "if autoNightModeTriggered" not in settings_verify:
+        raise RuntimeError("active Auto-Night state is not handled")
+    if "return current.withUpdatedAutomaticThemeSwitchSetting(updatedAutomaticThemeSwitchSetting)" not in settings_verify:
+        raise RuntimeError("night theme selection is not persisted")
+    if "return current.withUpdatedTheme(updatedTheme)" not in settings_verify:
+        raise RuntimeError("regular theme selection is not persisted")
     if "return current.withUpdatedTheme(updatedTheme).withUpdatedAutomaticThemeSwitchSetting(updatedAutomaticThemeSwitchSetting)" in settings_verify:
         raise RuntimeError("main theme selection still overwrites preferred night theme")
 
-    print("[ayu-theme-repair] V2 final window palette + scene-isolated Auto-Night + persistent preferred night theme")
+    print("[ayu-theme-repair] V3 native Liquid Glass + scene-isolated Auto-Night + split day/night theme selection")
     return 0
 
 

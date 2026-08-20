@@ -59,8 +59,10 @@ jobs:
           grep -q 'return values.first(where: { $0.baseTheme == .classic || $0.baseTheme == .day }) ?? values.first' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
           grep -q 'AYU_IOS27_SCENE_TRAIT_REPAIR_v2' submodules/Display/Source/NativeWindowHostView.swift
           ! grep -q 'else if #available(iOS 12.0' submodules/Display/Source/NativeWindowHostView.swift
-          grep -q 'AYU_FINAL_THEME_WINDOW_APPEARANCE_v2' submodules/TelegramUI/Sources/SharedAccountContext.swift
-          grep -q 'AYU_PREFERRED_NIGHT_THEME_PERSISTENCE_v2' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
+          ! grep -q 'ayuApplyFinalThemeAppearance\|AYU_FINAL_THEME_WINDOW_APPEARANCE' submodules/TelegramUI/Sources/SharedAccountContext.swift
+          grep -q 'AYU_SPLIT_DAY_NIGHT_THEME_SELECTION_v3' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
+          grep -q 'if autoNightModeTriggered' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
+          grep -q 'return current.withUpdatedAutomaticThemeSwitchSetting(updatedAutomaticThemeSwitchSetting)' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
           ! grep -q 'return current.withUpdatedTheme(updatedTheme).withUpdatedAutomaticThemeSwitchSetting(updatedAutomaticThemeSwitchSetting)' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
           grep -q 'theme: .builtin(.dayClassic)' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'automaticThemeSwitchSetting: AutomaticThemeSwitchSetting(force: false, trigger: .system, theme: .builtin(.night))' submodules/TelegramUI/Sources/SharedAccountContext.swift
@@ -133,8 +135,10 @@ jobs:
           grep -q 'return values.first(where: { $0.baseTheme == .classic || $0.baseTheme == .day }) ?? values.first' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
           grep -q 'AYU_IOS27_SCENE_TRAIT_REPAIR_v2' submodules/Display/Source/NativeWindowHostView.swift
           ! grep -q 'else if #available(iOS 12.0' submodules/Display/Source/NativeWindowHostView.swift
-          grep -q 'AYU_FINAL_THEME_WINDOW_APPEARANCE_v2' submodules/TelegramUI/Sources/SharedAccountContext.swift
-          grep -q 'AYU_PREFERRED_NIGHT_THEME_PERSISTENCE_v2' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
+          ! grep -q 'ayuApplyFinalThemeAppearance\|AYU_FINAL_THEME_WINDOW_APPEARANCE' submodules/TelegramUI/Sources/SharedAccountContext.swift
+          grep -q 'AYU_SPLIT_DAY_NIGHT_THEME_SELECTION_v3' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
+          grep -q 'if autoNightModeTriggered' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
+          grep -q 'return current.withUpdatedAutomaticThemeSwitchSetting(updatedAutomaticThemeSwitchSetting)' submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift
       - name: Create build configuration
         shell: bash
         run: |
