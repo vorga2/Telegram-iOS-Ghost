@@ -33,7 +33,13 @@ jobs:
 
           grep -q 'AYU_DELETED_MESSAGE_ALPHA_v1' submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageItemImpl.swift
           test "$(grep -c '? 0.5 : 1.0' submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageItemImpl.swift)" = 2
+          grep -q 'AYU_DELETED_DARK_BUBBLE_v1' submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift
+          grep -q 'case .telegram: ayuDeletedBubbleColor = nil' submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift
           grep -q 'AYU_DELETED_TIMESTAMP_MARKER_v1' submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/ChatMessageDateAndStatusNode.swift
+          grep -q 'AYU_CHAT_CAMERA_GHOST_v1' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift
+          grep -q 'recordVideoMessageCameraIsFront(position == .front)' submodules/TelegramUI/Components/VideoMessageCameraScreen/Sources/VideoMessageCameraScreen.swift
+          grep -q 'ItemListExpandableSwitchItem(' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
+          grep -q 'Запоминать последнюю камеру' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
           grep -q 'AYU_THEME_STATE_RECOVERY_v3' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'AYU_THEME_FAMILY_INTEGRITY_v3' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
           grep -q 'AYU_LEGACY_THEME_ACCENT_ALPHA_v4' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
