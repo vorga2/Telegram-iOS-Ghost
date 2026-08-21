@@ -30,7 +30,7 @@ PATCHERS = (
     "apply_ayu_spy_details.py",
     "apply_ayu_spy_content_read_dates.py",
     "apply_ayu_branding_only.py",
-    "apply_ayu_theme_state_migration.py",
+    "apply_ayu_theme_integrity.py",
 )
 
 
@@ -44,10 +44,10 @@ def main() -> int:
     for name in PATCHERS:
         subprocess.run([sys.executable, str(here / name), str(root)], check=True)
 
-    # Theme selection, resolution and native glass stay byte-for-byte upstream.
+    # Theme selection UI and native glass stay byte-for-byte upstream. The two
+    # resolver files below are intentionally excluded: theme_integrity only makes
+    # cloud light/dark family selection deterministic.
     stock_paths = (
-        "submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift",
-        "submodules/TelegramPresentationData/Sources/PresentationData.swift",
         "submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift",
         "submodules/Display/Source/NativeWindowHostView.swift",
         "submodules/TelegramUI/Components/LiquidLens/Sources/LiquidLensView.swift",
@@ -59,7 +59,7 @@ def main() -> int:
     for relative in stock_paths:
         subprocess.run(["git", "diff", "--exit-code", "HEAD", "--", relative], cwd=root, check=True)
 
-    print("[ayu-full-stock] Deleted/ViewOnce/Spy/Ghost restored; Telegram theme and glass pipeline remains stock")
+    print("[ayu-full-stock] Deleted/ViewOnce/Spy/Ghost restored; Telegram theme UI/glass preserved with deterministic theme families")
     return 0
 
 
