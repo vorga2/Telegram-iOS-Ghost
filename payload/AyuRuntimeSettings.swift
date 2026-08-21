@@ -148,8 +148,17 @@ public enum AyuRuntimeSettings {
     private static func loadDeletedState() -> AyuDeletedState {
         let defaults = UserDefaults.standard
         let rawGlobal = defaults.array(forKey: deletedGlobalKey) as? [Int] ?? []
-        let globalIds = Set(rawGlobal.compactMap { Int32(exactly: $0) })
         let fullIds = Set(defaults.stringArray(forKey: deletedFullKey) ?? [])
+        // Global delete updates do not contain a peer id. Once Telegram has
+        // resolved one to a peer-qualified key, retaining the raw Int32 would
+        // make an unrelated message with the same per-chat id look deleted.
+        let resolvedIds = Set(fullIds.compactMap { key -> Int32? in
+            guard let rawId = key.split(separator: ":").last else {
+                return nil
+            }
+            return Int32(rawId)
+        })
+        let globalIds = Set(rawGlobal.compactMap { Int32(exactly: $0) }).subtracting(resolvedIds)
         return AyuDeletedState(globalIds: globalIds, fullIds: fullIds)
     }
 
@@ -346,6 +355,9 @@ public enum AyuRuntimeSettings {
             var current = current
             for id in ids {
                 current.fullIds.insert(fullKey(id))
+                if id.peerId.namespace != Namespaces.Peer.CloudChannel {
+                    current.globalIds.remove(id.id)
+                }
             }
             if current.fullIds.count > maxDeletedMarkers {
                 current.fullIds = Set(current.fullIds.prefix(maxDeletedMarkers))
@@ -367,11 +379,16 @@ public enum AyuRuntimeSettings {
         let key = fullKey(id)
         var updated: AyuDeletedState?
         _ = deletedState.modify { current in
-            if current.fullIds.contains(key) {
+            let alreadyQualified = current.fullIds.contains(key)
+            let hasRawGlobal = id.peerId.namespace != Namespaces.Peer.CloudChannel && current.globalIds.contains(id.id)
+            if alreadyQualified && !hasRawGlobal {
                 return current
             }
             var current = current
             current.fullIds.insert(key)
+            if id.peerId.namespace != Namespaces.Peer.CloudChannel {
+                current.globalIds.remove(id.id)
+            }
             if current.fullIds.count > maxDeletedMarkers {
                 current.fullIds = Set(current.fullIds.prefix(maxDeletedMarkers))
             }

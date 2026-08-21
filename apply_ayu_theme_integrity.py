@@ -168,6 +168,13 @@ def patch_manual_base(root: Path) -> None:
 // {BASE_MARK}
 private func ayuManualThemeBase(_ settings: PresentationThemeSettings, reference: PresentationThemeReference) -> TelegramBaseTheme? {{
     if let preferred = settings.themePreferredBaseTheme[reference.index] {{
+        // Telegram reserves the tinted family for Auto-Night. Treating a stale
+        // tinted preference as the manual base colors every profile surface and
+        // bubble from the wallpaper palette. Manual dark selection stays dark,
+        // but resolves through Telegram's neutral Night record when available.
+        if preferred == .tinted {{
+            return .night
+        }}
         return preferred
     }}
     if case let .cloud(info) = reference, let values = info.theme.settings, !values.isEmpty {{

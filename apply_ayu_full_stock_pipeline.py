@@ -14,6 +14,7 @@ PATCHERS = (
     "apply_ayu_view_once_burn.py",
     "apply_ayu_stock_ui_guard.py",
     "apply_ayu_deleted_alpha.py",
+    "apply_ayu_deleted_viewer_safety.py",
     "apply_ayu_deleted_background.py",
     "apply_ayu_deleted_marker.py",
     "apply_ayu_deleted_realtime.py",
