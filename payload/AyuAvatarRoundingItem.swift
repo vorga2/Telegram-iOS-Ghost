@@ -10,12 +10,14 @@ import ItemListUI
 final class AyuAvatarRoundingItem: ListViewItem, ItemListItem {
     let theme: PresentationTheme
     let value: Int32
+    let isChat: Bool
     let sectionId: ItemListSectionId
     let updated: (Int32) -> Void
 
-    init(theme: PresentationTheme, value: Int32, sectionId: ItemListSectionId, updated: @escaping (Int32) -> Void) {
+    init(theme: PresentationTheme, value: Int32, isChat: Bool, sectionId: ItemListSectionId, updated: @escaping (Int32) -> Void) {
         self.theme = theme
         self.value = value
+        self.isChat = isChat
         self.sectionId = sectionId
         self.updated = updated
     }
@@ -55,6 +57,7 @@ private final class AyuAvatarRoundingItemNode: ListViewItemNode {
     private let squareLabel = UILabel()
     private let circleLabel = UILabel()
     private let previewCard = UIView()
+    private let previewBubble = UIView()
     private let previewAvatar = UIView()
     private let previewLine1 = UIView()
     private let previewLine2 = UIView()
@@ -76,7 +79,6 @@ private final class AyuAvatarRoundingItemNode: ListViewItemNode {
             self.view.addSubview(label)
         }
         self.titleLabel.font = Font.medium(17.0)
-        self.titleLabel.text = "Закругление аватарок"
         self.valueLabel.font = Font.semibold(14.0)
         self.valueLabel.textAlignment = .center
         self.valueLabel.layer.cornerRadius = 7.0
@@ -105,9 +107,12 @@ private final class AyuAvatarRoundingItemNode: ListViewItemNode {
         self.view.addSubview(self.previewCard)
         self.previewAvatar.clipsToBounds = true
         self.previewCard.addSubview(self.previewAvatar)
+        self.previewBubble.isUserInteractionEnabled = false
+        self.previewBubble.clipsToBounds = true
+        self.previewCard.addSubview(self.previewBubble)
         for line in [self.previewLine1, self.previewLine2, self.previewBadge] {
             line.layer.cornerRadius = 4.0
-            self.previewCard.addSubview(line)
+            self.previewBubble.addSubview(line)
         }
         self.updateViews()
     }
@@ -120,12 +125,15 @@ private final class AyuAvatarRoundingItemNode: ListViewItemNode {
     private func updateViews() {
         guard let item = self.item, let params = self.layoutParams else { return }
         let theme = item.theme
+        self.titleLabel.text = item.isChat ? "Аватарки в чате" : "Закругление аватарок"
         self.titleLabel.textColor = theme.list.itemPrimaryTextColor
         self.valueLabel.textColor = theme.list.itemAccentColor
         self.valueLabel.backgroundColor = theme.list.itemAccentColor.withAlphaComponent(0.12)
         self.squareLabel.textColor = theme.list.itemSecondaryTextColor
         self.circleLabel.textColor = theme.list.itemSecondaryTextColor
-        self.previewCard.backgroundColor = theme.list.itemHighlightedBackgroundColor
+        self.previewCard.backgroundColor = item.isChat ? theme.list.itemBlocksBackgroundColor : theme.list.itemHighlightedBackgroundColor
+        self.previewBubble.backgroundColor = item.isChat ? theme.list.itemHighlightedBackgroundColor : .clear
+        self.previewBubble.layer.cornerRadius = item.isChat ? 14.0 : 0.0
         self.previewAvatar.backgroundColor = theme.list.itemAccentColor
         self.previewLine1.backgroundColor = theme.list.itemSecondaryTextColor.withAlphaComponent(0.45)
         self.previewLine2.backgroundColor = theme.list.itemSecondaryTextColor.withAlphaComponent(0.28)
@@ -176,10 +184,18 @@ private final class AyuAvatarRoundingItemNode: ListViewItemNode {
                 self.squareLabel.frame = CGRect(x: left, y: 42.0, width: 90.0, height: 20.0)
                 self.circleLabel.frame = CGRect(x: right - 90.0, y: 42.0, width: 90.0, height: 20.0)
                 self.previewCard.frame = CGRect(x: left, y: 109.0, width: right - left, height: 60.0)
-                self.previewAvatar.frame = CGRect(x: 10.0, y: 8.0, width: 44.0, height: 44.0)
-                self.previewLine1.frame = CGRect(x: 68.0, y: 15.0, width: min(145.0, self.previewCard.bounds.width - 124.0), height: 8.0)
-                self.previewLine2.frame = CGRect(x: 68.0, y: 35.0, width: min(105.0, self.previewCard.bounds.width - 124.0), height: 8.0)
-                self.previewBadge.frame = CGRect(x: self.previewCard.bounds.width - 58.0, y: 17.0, width: 42.0, height: 18.0)
+                self.previewAvatar.frame = CGRect(x: 8.0, y: 8.0, width: 44.0, height: 44.0)
+                if item.isChat {
+                    self.previewBubble.frame = CGRect(x: 62.0, y: 5.0, width: self.previewCard.bounds.width - 70.0, height: 50.0)
+                    self.previewLine1.frame = CGRect(x: 12.0, y: 10.0, width: min(126.0, self.previewBubble.bounds.width - 72.0), height: 8.0)
+                    self.previewLine2.frame = CGRect(x: 12.0, y: 30.0, width: min(92.0, self.previewBubble.bounds.width - 72.0), height: 8.0)
+                    self.previewBadge.frame = CGRect(x: self.previewBubble.bounds.width - 52.0, y: 26.0, width: 40.0, height: 14.0)
+                } else {
+                    self.previewBubble.frame = self.previewCard.bounds
+                    self.previewLine1.frame = CGRect(x: 68.0, y: 15.0, width: min(145.0, self.previewCard.bounds.width - 124.0), height: 8.0)
+                    self.previewLine2.frame = CGRect(x: 68.0, y: 35.0, width: min(105.0, self.previewCard.bounds.width - 124.0), height: 8.0)
+                    self.previewBadge.frame = CGRect(x: self.previewCard.bounds.width - 58.0, y: 17.0, width: 42.0, height: 18.0)
+                }
                 self.updateViews()
             })
         }
