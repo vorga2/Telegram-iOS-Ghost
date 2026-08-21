@@ -146,6 +146,27 @@ def patch_camera(path: Path) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def patch_camera_capture_route(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    route_mark = "AYU_CAMERA_CAPTURE_ROUTE_v2"
+    if route_mark in text:
+        return
+    text = one(
+        text,
+        "        self.setDualCameraEnabled(configuration.isDualEnabled, change: false)\n#endif",
+        "        self.setDualCameraEnabled(configuration.isDualEnabled, change: false)\n"
+        "        // AYU_CAMERA_CAPTURE_ROUTE_v2: Dual Camera keeps both physical\n"
+        "        // devices alive. Synchronize the recorder's source with the saved\n"
+        "        // UI position before the first frame; otherwise it defaults front.\n"
+        "        if configuration.isDualEnabled {\n"
+        "            self.mainDeviceContext?.output.markPositionChange(position: configuration.position)\n"
+        "        }\n"
+        "#endif",
+        "dual-camera initial recording route",
+    )
+    path.write_text(text, encoding="utf-8")
+
+
 GHOST_BLOCK = r'''// AYU_CHAT_CAMERA_GHOST_v1: native expandable Ghost row.
 private final class AyuGhostArguments {
     let updateBool: (AyuRuntimeOption, Bool) -> Void
@@ -411,17 +432,21 @@ def main() -> int:
     root = Path(sys.argv[1]).resolve()
     patch_runtime(root / "submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift")
     patch_camera(root / "submodules/TelegramUI/Components/VideoMessageCameraScreen/Sources/VideoMessageCameraScreen.swift")
+    patch_camera_capture_route(root / "submodules/Camera/Sources/Camera.swift")
     patch_settings(root / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift")
     patch_extera_entry(root / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift")
 
     runtime = (root / "submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift").read_text(encoding="utf-8")
     camera = (root / "submodules/TelegramUI/Components/VideoMessageCameraScreen/Sources/VideoMessageCameraScreen.swift").read_text(encoding="utf-8")
+    camera_core = (root / "submodules/Camera/Sources/Camera.swift").read_text(encoding="utf-8")
     settings = (root / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift").read_text(encoding="utf-8")
     peer_settings = (root / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift").read_text(encoding="utf-8")
     checks = (
         (runtime, "case rememberLastCamera = 13"),
         (runtime, "initialVideoMessageCameraIsFront"),
         (camera, "recordVideoMessageCameraIsFront(position == .front)"),
+        (camera_core, "AYU_CAMERA_CAPTURE_ROUTE_v2"),
+        (camera_core, "markPositionChange(position: configuration.position)"),
         (settings, "ItemListExpandableSwitchItem("),
         (settings, 'title: "Запоминать последнюю камеру"'),
         (settings, "private func ayuSpySettingsController"),

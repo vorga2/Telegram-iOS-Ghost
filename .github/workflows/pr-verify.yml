@@ -42,6 +42,8 @@ jobs:
           grep -q 'AYU_DELETED_TIMESTAMP_MARKER_v1' submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/ChatMessageDateAndStatusNode.swift
           grep -q 'AYU_CHAT_CAMERA_GHOST_v1' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift
           grep -q 'recordVideoMessageCameraIsFront(position == .front)' submodules/TelegramUI/Components/VideoMessageCameraScreen/Sources/VideoMessageCameraScreen.swift
+          grep -q 'AYU_CAMERA_CAPTURE_ROUTE_v2' submodules/Camera/Sources/Camera.swift
+          grep -q 'markPositionChange(position: configuration.position)' submodules/Camera/Sources/Camera.swift
           grep -q 'ItemListExpandableSwitchItem(' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
           grep -q 'private func ayuSpySettingsController' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
           grep -q 'Запоминать последнюю камеру' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
