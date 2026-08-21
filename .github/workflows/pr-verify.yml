@@ -36,6 +36,9 @@ jobs:
           grep -q 'AYU_DELETED_TIMESTAMP_MARKER_v1' submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/ChatMessageDateAndStatusNode.swift
           grep -q 'AYU_THEME_STATE_RECOVERY_v3' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'AYU_THEME_FAMILY_INTEGRITY_v3' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
+          grep -q 'AYU_LEGACY_THEME_ACCENT_ALPHA_v4' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
+          test "$(grep -c 'ayuThemeAccentColor(settings.accentColor)' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift)" = 4
+          ! grep -q 'UIColor(argb: settings.accentColor)' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
           grep -q 'AYU_MANUAL_THEME_BASE_INTEGRITY_v3' submodules/TelegramPresentationData/Sources/PresentationData.swift
           ! grep -q 'themePreferredBaseTheme: \[:\]' submodules/TelegramUI/Sources/SharedAccountContext.swift
           ! grep -q 'AYU_THEME_STATE_MIGRATION_v2' submodules/TelegramUI/Sources/SharedAccountContext.swift

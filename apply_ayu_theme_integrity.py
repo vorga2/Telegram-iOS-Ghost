@@ -8,6 +8,7 @@ from pathlib import Path
 STATE_MARK = "AYU_THEME_STATE_RECOVERY_v3"
 FAMILY_MARK = "AYU_THEME_FAMILY_INTEGRITY_v3"
 BASE_MARK = "AYU_MANUAL_THEME_BASE_INTEGRITY_v3"
+ALPHA_MARK = "AYU_LEGACY_THEME_ACCENT_ALPHA_v4"
 
 
 def one(text: str, old: str, new: str, label: str) -> str:
@@ -98,6 +99,19 @@ private func ayuCompatibleThemeSettings(_ values: [TelegramThemeSettings]?, base
     return values.first(where: {{ $0.baseTheme == .classic || $0.baseTheme == .day }}) ?? values.first
 }}
 
+// {ALPHA_MARK}
+// Legacy/cached cloud settings can contain RGB24 in the Int32 color slot. UIKit's
+// ARGB initializer interprets 0x00RRGGBB as fully transparent. An accent cannot
+// usefully be alpha-zero, so normalize only that legacy representation to opaque;
+// every valid non-zero ARGB alpha remains byte-for-byte unchanged.
+private func ayuThemeAccentColor(_ value: UInt32) -> UIColor {{
+    if value & 0xff000000 == 0 {{
+        return UIColor(rgb: value)
+    }} else {{
+        return UIColor(argb: value)
+    }}
+}}
+
 '''
     text = one(text, import_anchor, helper, "theme family helper")
 
@@ -132,6 +146,13 @@ private func ayuCompatibleThemeSettings(_ values: [TelegramThemeSettings]?, base
             if let settings = settings {
 '''
     text = one(text, old_runtime, new_runtime, "runtime cloud resolver")
+
+    accent_count = text.count("UIColor(argb: settings.accentColor)")
+    outgoing_count = text.count("UIColor(argb: $0)")
+    if accent_count != 4 or outgoing_count != 4:
+        raise RuntimeError(f"theme accent alpha: expected 4+4 anchors, found {accent_count}+{outgoing_count}")
+    text = text.replace("UIColor(argb: settings.accentColor)", "ayuThemeAccentColor(settings.accentColor)")
+    text = text.replace("UIColor(argb: $0)", "ayuThemeAccentColor($0)")
     path.write_text(text, encoding="utf-8")
 
 
@@ -200,10 +221,12 @@ def main() -> int:
         (STATE_MARK, shared),
         (FAMILY_MARK, make),
         (BASE_MARK, presentation),
+        (ALPHA_MARK, make),
         ("automaticThemeSwitchSetting.trigger = .explicitNone", shared),
         ("themeSpecificAccentColors: current.themeSpecificAccentColors", shared),
         ("themeSpecificChatWallpapers: current.themeSpecificChatWallpapers", shared),
         ("let settings = ayuCompatibleThemeSettings(info.theme.settings, baseTheme: baseTheme)", make),
+        ("accentColor: ayuThemeAccentColor(settings.accentColor)", make),
         ("preferredBaseTheme = ayuManualThemeBase(themeSettings, reference: effectiveTheme)", presentation),
     ):
         if required not in value:
