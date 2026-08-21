@@ -48,13 +48,13 @@ jobs:
           grep -q 'text: "exteraGram"' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift
           grep -q 'ayuExteraSettingsController(context: context)' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift
           grep -Fq 'let entries: [AyuMainEntry] = [.header, .ghost, .customization, .spy]' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
-          grep -q 'AYU_THEME_STATE_RECOVERY_v3' submodules/TelegramUI/Sources/SharedAccountContext.swift
-          grep -q 'AYU_THEME_FAMILY_INTEGRITY_v3' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
+          grep -q 'AYU_THEME_STOCK_ROUTING_RECOVERY_v4' submodules/TelegramUI/Sources/SharedAccountContext.swift
+          grep -q 'automaticThemeSwitchSetting.trigger = .system' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'AYU_LEGACY_THEME_ACCENT_ALPHA_v4' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
           test "$(grep -c 'ayuThemeAccentColor(settings.accentColor)' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift)" = 4
           ! grep -q 'UIColor(argb: settings.accentColor)' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
-          grep -q 'AYU_MANUAL_THEME_BASE_INTEGRITY_v3' submodules/TelegramPresentationData/Sources/PresentationData.swift
-          grep -q 'if preferred == .tinted' submodules/TelegramPresentationData/Sources/PresentationData.swift
+          ! grep -q 'ayuCompatibleThemeSettings' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
+          ! grep -q 'ayuManualThemeBase' submodules/TelegramPresentationData/Sources/PresentationData.swift
           ! grep -q 'themePreferredBaseTheme: \[:\]' submodules/TelegramUI/Sources/SharedAccountContext.swift
           ! grep -q 'AYU_THEME_STATE_MIGRATION_v2' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'AYU_SPY_SETTINGS_v0_3' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift

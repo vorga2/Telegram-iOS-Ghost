@@ -47,9 +47,9 @@ def main() -> int:
     for name in PATCHERS:
         subprocess.run([sys.executable, str(here / name), str(root)], check=True)
 
-    # Theme selection UI and native glass stay byte-for-byte upstream. The two
-    # resolver files below are intentionally excluded: theme_integrity only makes
-    # cloud light/dark family selection deterministic.
+    # Theme selection, family routing and native glass stay byte-for-byte
+    # upstream. MakePresentationTheme differs only by the legacy alpha-zero
+    # compatibility helper; it does not select a theme or wallpaper variant.
     stock_paths = (
         "submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift",
         "submodules/Display/Source/NativeWindowHostView.swift",
@@ -58,11 +58,12 @@ def main() -> int:
         "submodules/TelegramUI/Components/Chat/ChatMessageReplyInfoNode/Sources/ChatMessageReplyInfoNode.swift",
         "submodules/TelegramUI/Sources/ChatPinnedMessageTitlePanelNode.swift",
         "submodules/TelegramUI/Components/PeerInfo/PeerInfoVisualMediaPaneNode/Sources/PeerInfoGiftsPaneNode.swift",
+        "submodules/TelegramPresentationData/Sources/PresentationData.swift",
     )
     for relative in stock_paths:
         subprocess.run(["git", "diff", "--exit-code", "HEAD", "--", relative], cwd=root, check=True)
 
-    print("[ayu-full-stock] Deleted/ViewOnce/Spy/Ghost restored; Telegram theme UI/glass preserved with deterministic theme families")
+    print("[ayu-full-stock] Deleted/ViewOnce/Spy/Ghost restored; Telegram theme family, wallpaper and glass routing preserved")
     return 0
 
 
