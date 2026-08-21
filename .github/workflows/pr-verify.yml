@@ -39,7 +39,11 @@ jobs:
           grep -q 'AYU_CHAT_CAMERA_GHOST_v1' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift
           grep -q 'recordVideoMessageCameraIsFront(position == .front)' submodules/TelegramUI/Components/VideoMessageCameraScreen/Sources/VideoMessageCameraScreen.swift
           grep -q 'ItemListExpandableSwitchItem(' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
+          grep -q 'private func ayuSpySettingsController' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
           grep -q 'Запоминать последнюю камеру' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
+          grep -q 'text: "exteraGram"' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift
+          grep -q 'ayuExteraSettingsController(context: context)' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift
+          grep -Fq 'let entries: [AyuMainEntry] = [.header, .ghost, .customization, .spy]' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
           grep -q 'AYU_THEME_STATE_RECOVERY_v3' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'AYU_THEME_FAMILY_INTEGRITY_v3' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
           grep -q 'AYU_LEGACY_THEME_ACCENT_ALPHA_v4' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift

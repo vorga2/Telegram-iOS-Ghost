@@ -250,7 +250,7 @@ GHOST_CONTROLLER = r'''private func ayuGhostSettingsController(context: AccountC
 '''
 
 
-CHATS_CONTROLLER = r'''// AYU_CHAT_CAMERA_GHOST_v1: Chats -> Camera settings.
+EXTERA_CONTROLLERS = r'''// AYU_CHAT_CAMERA_GHOST_v1: exteraGram -> Chats -> Camera settings.
 private final class AyuChatsArguments {
     let updateRememberCamera: (Bool) -> Void
     init(updateRememberCamera: @escaping (Bool) -> Void) {
@@ -284,7 +284,7 @@ private enum AyuChatsEntry: ItemListNodeEntry {
     }
 }
 
-private func ayuChatsSettingsController(context: AccountContext) -> ViewController {
+private func ayuExteraChatsSettingsController(context: AccountContext) -> ViewController {
     let revision = ValuePromise<Int32>(0, ignoreRepeated: false)
     var revisionValue: Int32 = 0
     let arguments = AyuChatsArguments(updateRememberCamera: { value in
@@ -300,6 +300,56 @@ private func ayuChatsSettingsController(context: AccountContext) -> ViewControll
         return (controllerState, (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true), arguments))
     }
     return ItemListController(context: context, state: signal)
+}
+
+private final class AyuExteraArguments {
+    let openChats: () -> Void
+    init(openChats: @escaping () -> Void) {
+        self.openChats = openChats
+    }
+}
+
+private enum AyuExteraSection: Int32 { case categories }
+
+private enum AyuExteraEntry: ItemListNodeEntry {
+    case header
+    case chats
+
+    var section: ItemListSectionId { AyuExteraSection.categories.rawValue }
+    var stableId: Int32 {
+        switch self {
+        case .header: return 0
+        case .chats: return 1
+        }
+    }
+    static func <(lhs: AyuExteraEntry, rhs: AyuExteraEntry) -> Bool { lhs.stableId < rhs.stableId }
+
+    func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
+        let arguments = arguments as! AyuExteraArguments
+        switch self {
+        case .header:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "КАТЕГОРИИ", sectionId: self.section)
+        case .chats:
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Чаты", label: "", sectionId: self.section, style: .blocks, action: arguments.openChats)
+        }
+    }
+}
+
+func ayuExteraSettingsController(context: AccountContext) -> ViewController {
+    let controllerBox = AyuWeakControllerBox()
+    let arguments = AyuExteraArguments(openChats: {
+        controllerBox.value?.push(ayuExteraChatsSettingsController(context: context))
+    })
+    let signal = context.sharedContext.presentationData
+    |> deliverOnMainQueue
+    |> map { presentationData -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        let entries: [AyuExteraEntry] = [.header, .chats]
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("exteraGram"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        return (controllerState, (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: false), arguments))
+    }
+    let controller = ItemListController(context: context, state: signal)
+    controllerBox.value = controller
+    return controller
 }
 
 '''
@@ -320,60 +370,36 @@ def patch_settings(path: Path) -> None:
     text = replace_range(
         text,
         "private func ayuGhostSettingsController(context: AccountContext) -> ViewController {",
-        "func ayuSettingsController(context: AccountContext) -> ViewController {",
-        GHOST_CONTROLLER + CHATS_CONTROLLER,
+        "// AYU_SPY_SETTINGS_v0_3",
+        GHOST_CONTROLLER + EXTERA_CONTROLLERS,
         "expandable ghost controller",
     )
-    text = one(
-        text,
-        "    let openCustomization: () -> Void\n    let openSpy: () -> Void\n\n    init(openGhost: @escaping () -> Void, openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void) {\n        self.openGhost = openGhost\n        self.openCustomization = openCustomization\n        self.openSpy = openSpy\n",
-        "    let openCustomization: () -> Void\n"
-        "    let openSpy: () -> Void\n"
-        "    let openChats: () -> Void\n\n"
-        "    init(openGhost: @escaping () -> Void, openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openChats: @escaping () -> Void) {\n"
-        "        self.openGhost = openGhost\n"
-        "        self.openCustomization = openCustomization\n"
-        "        self.openSpy = openSpy\n"
-        "        self.openChats = openChats\n",
-        "chats main arguments",
-    )
-    text = one(
-        text,
-        "    case customization\n    case spy\n",
-        "    case customization\n    case spy\n    case chats\n",
-        "chats main entry",
-    )
-    text = one(
-        text,
-        "        case .spy: return 3\n",
-        "        case .spy: return 3\n        case .chats: return 4\n",
-        "chats stable id",
-    )
-    text = one(
-        text,
-        "        case .spy:\n            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: \"Шпион\", label: \"\", sectionId: self.section, style: .blocks, action: { arguments.openSpy() })\n",
-        "        case .spy:\n"
-        "            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: \"Шпион\", label: \"\", sectionId: self.section, style: .blocks, action: { arguments.openSpy() })\n"
-        "        case .chats:\n"
-        "            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: \"Чаты\", label: \"\", sectionId: self.section, style: .blocks, action: { arguments.openChats() })\n",
-        "chats main row",
-    )
-    text = one(
-        text,
-        "    }, openSpy: {\n        controllerBox.value?.push(ayuSpySettingsController(context: context))\n    })",
-        "    }, openSpy: {\n"
-        "        controllerBox.value?.push(ayuSpySettingsController(context: context))\n"
-        "    }, openChats: {\n"
-        "        controllerBox.value?.push(ayuChatsSettingsController(context: context))\n"
-        "    })",
-        "chats navigation",
-    )
-    text = one(
-        text,
-        "        let entries: [AyuMainEntry] = [.header, .ghost, .customization, .spy]\n",
-        "        let entries: [AyuMainEntry] = [.header, .ghost, .customization, .spy, .chats]\n",
-        "chats root entries",
-    )
+    path.write_text(text, encoding="utf-8")
+
+
+def patch_extera_entry(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    entry_mark = "AYU_EXTERAGRAM_SETTINGS_ENTRY_v1"
+    if entry_mark in text:
+        return
+
+    ayu_row = '''    // AYU_IOS_PATCH_v0_3: native AyuGram entry directly under profile photo controls.
+    items[.edit]!.append(PeerInfoScreenDisclosureItem(id: 90, text: "AyuGram", icon: PresentationResourcesSettings.security, action: {
+        guard let controller = interaction.getController() else {
+            return
+        }
+        controller.push(ayuSettingsController(context: context))
+    }))
+''' + "    \n"
+    extera_row = ayu_row + f'''    // {entry_mark}: separate exteraGram settings root.
+    items[.edit]!.append(PeerInfoScreenDisclosureItem(id: 91, text: "exteraGram", icon: PresentationResourcesSettings.chatFolders, action: {{
+        guard let controller = interaction.getController() else {{
+            return
+        }}
+        controller.push(ayuExteraSettingsController(context: context))
+    }}))
+''' + "    \n"
+    text = one(text, ayu_row, extera_row, "exteraGram settings entry")
     path.write_text(text, encoding="utf-8")
 
 
@@ -386,23 +412,29 @@ def main() -> int:
     patch_runtime(root / "submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift")
     patch_camera(root / "submodules/TelegramUI/Components/VideoMessageCameraScreen/Sources/VideoMessageCameraScreen.swift")
     patch_settings(root / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift")
+    patch_extera_entry(root / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift")
 
     runtime = (root / "submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift").read_text(encoding="utf-8")
     camera = (root / "submodules/TelegramUI/Components/VideoMessageCameraScreen/Sources/VideoMessageCameraScreen.swift").read_text(encoding="utf-8")
     settings = (root / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift").read_text(encoding="utf-8")
+    peer_settings = (root / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift").read_text(encoding="utf-8")
     checks = (
         (runtime, "case rememberLastCamera = 13"),
         (runtime, "initialVideoMessageCameraIsFront"),
         (camera, "recordVideoMessageCameraIsFront(position == .front)"),
         (settings, "ItemListExpandableSwitchItem("),
         (settings, 'title: "Запоминать последнюю камеру"'),
-        (settings, 'title: "Чаты"'),
+        (settings, "private func ayuSpySettingsController"),
+        (settings, "func ayuExteraSettingsController"),
+        (settings, 'let entries: [AyuMainEntry] = [.header, .ghost, .customization, .spy]'),
+        (peer_settings, 'text: "exteraGram"'),
+        (peer_settings, "ayuExteraSettingsController(context: context)"),
     )
     for source, value in checks:
         if value not in source:
             raise RuntimeError(f"chat/camera/Ghost patch incomplete: {value}")
 
-    print("[ayu-chat-camera-ghost] Chats camera memory + expandable Ghost installed without polling")
+    print("[ayu-chat-camera-ghost] exteraGram Chats camera memory + expandable Ghost installed without polling")
     return 0
 
 
