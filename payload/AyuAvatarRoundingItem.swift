@@ -62,7 +62,7 @@ private final class AyuAvatarRoundingItemNode: ListViewItemNode {
     private var item: AyuAvatarRoundingItem?
     private var layoutParams: ListViewItemLayoutParams?
 
-    override init() {
+    init() {
         super.init(layerBacked: false)
         self.backgroundNode.isLayerBacked = true
         self.topStripeNode.isLayerBacked = true
