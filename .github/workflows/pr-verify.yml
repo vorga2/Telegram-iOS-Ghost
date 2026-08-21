@@ -130,36 +130,6 @@ jobs:
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
           security find-identity -v -p codesigning || true
 
-      - name: Fast compile check for Ayu-touched modules
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$RUNNER_TEMP/Telegram-iOS"
-          mkdir -p "$HOME/telegram-bazel-cache" "$HOME/telegram-bazel-user-root"
-
-          targets=(
-            "//submodules/Postbox:Postbox"
-            "//submodules/TelegramCore:TelegramCore"
-            "//submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode:ChatMessageDateAndStatusNode"
-            "//submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode:ChatMessageBubbleItemNode"
-            "//submodules/TelegramUI/Components/Chat/ChatMessageItemImpl:ChatMessageItemImpl"
-            "//submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen:PeerInfoScreen"
-            "//submodules/TelegramUI:TelegramUI"
-          )
-
-          for target in "${targets[@]}"; do
-            echo "=== Ayu compile-check: $target ==="
-            python3 build-system/Make/Make.py \
-              --bazelUserRoot="$HOME/telegram-bazel-user-root" \
-              --cacheDir="$HOME/telegram-bazel-cache" \
-              build \
-              --configurationPath=build-system/ayu-ci-configuration.json \
-              --codesigningInformationPath=build-system/fake-codesigning \
-              --buildNumber="$GITHUB_RUN_NUMBER" \
-              --configuration=debug_arm64 \
-              --target="$target"
-          done
-
       - name: Build release arm64
         shell: bash
         run: |
