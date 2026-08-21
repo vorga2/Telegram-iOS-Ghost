@@ -50,7 +50,7 @@ def main() -> int:
                 let markerLength = (markerPrefix as NSString).length
                 if markerLength <= ayuDateText.length {{
                     let markerColor: UIColor
-                    switch AyuDeletedMarkerColor(rawValue: AyuRuntimeSettings.snapshot.deletedMarkerColor) ?? .red {{
+                    switch AyuDeletedMarkerColor(rawValue: AyuRuntimeSettings.snapshot.deletedMarkerColor) ?? .telegram {{
                     case .red: markerColor = UIColor.systemRed
                     case .orange: markerColor = UIColor.systemOrange
                     case .gray: markerColor = UIColor.systemGray
@@ -59,6 +59,7 @@ def main() -> int:
                     case .magenta: markerColor = UIColor(red: 0.86, green: 0.12, blue: 0.46, alpha: 1.0)
                     case .indigo: markerColor = UIColor.systemIndigo
                     case .blue: markerColor = UIColor.systemBlue
+                    case .telegram: markerColor = dateColor
                     }}
                     ayuDateText.addAttribute(.foregroundColor, value: markerColor, range: NSRange(location: 0, length: markerLength))
                 }}

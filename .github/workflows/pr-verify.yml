@@ -38,6 +38,8 @@ jobs:
           grep -q 'AYU_SPY_SETTINGS_v0_3' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift
           grep -q 'AYU_DELETED_ARCHIVE_v0_3' submodules/TelegramCore/Sources/State/AccountStateManager.swift
           grep -q 'AYU_VIEW_ONCE_DURABLE_v0_3' submodules/TelegramCore/Sources/TelegramEngine/Messages/MarkMessageContentAsConsumedInteractively.swift
+          grep -q 'case telegram = 8' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift
+          grep -q 'case .telegram: markerColor = dateColor' submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/ChatMessageDateAndStatusNode.swift
           echo '=== FULL AYU + STOCK TELEGRAM THEMES VERIFY SUCCESS ==='
 
   build_ipa:
