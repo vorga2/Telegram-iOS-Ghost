@@ -524,15 +524,18 @@ private final class AyuChatListSnowView: UIView {
         self.clipsToBounds = true
 
         self.cell.birthRate = 18.0
-        self.cell.lifetime = 10.5
-        self.cell.lifetimeRange = 1.5
-        self.cell.velocity = 30.0
-        self.cell.velocityRange = 9.0
-        self.cell.emissionLongitude = .pi * 0.5
-        self.cell.emissionRange = 0.12
+        self.cell.lifetime = 7.5
+        self.cell.lifetimeRange = 1.0
+        // Gravity, rather than an emission angle, guarantees a vertical path
+        // in the layer's coordinate system and leaves no horizontal velocity.
+        self.cell.velocity = 0.0
+        self.cell.velocityRange = 0.0
+        self.cell.xAcceleration = 0.0
+        self.cell.yAcceleration = 24.0
+        self.cell.emissionRange = 0.0
         self.cell.scale = 0.65
         self.cell.scaleRange = 0.3
-        self.cell.alphaSpeed = -0.035
+        self.cell.alphaSpeed = -0.075
         self.cell.spinRange = .pi
 
         self.emitter.emitterShape = .line
@@ -546,7 +549,9 @@ private final class AyuChatListSnowView: UIView {
             UIColor.black.cgColor,
             UIColor.clear.cgColor
         ]
-        self.fadeMask.locations = [0.0, 0.1, 0.68, 1.0]
+        self.fadeMask.startPoint = CGPoint(x: 0.5, y: 0.0)
+        self.fadeMask.endPoint = CGPoint(x: 0.5, y: 1.0)
+        self.fadeMask.locations = [0.0, 0.08, 0.72, 1.0]
         self.layer.mask = self.fadeMask
         self.update(isDark: true)
     }
@@ -560,7 +565,7 @@ private final class AyuChatListSnowView: UIView {
             return
         }
         self.currentIsDark = isDark
-        let color = isDark ? UIColor.white.withAlphaComponent(0.82) : UIColor.black.withAlphaComponent(0.52)
+        let color = isDark ? UIColor.white : UIColor.black
         self.cell.contents = AyuChatListSnowView.particleImage(color: color)
         self.emitter.emitterCells = [self.cell]
     }

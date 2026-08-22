@@ -75,15 +75,17 @@ private final class AyuChatListPreviewSnowView: UIView {
         self.clipsToBounds = true
 
         self.cell.birthRate = 12.0
-        self.cell.lifetime = 4.0
-        self.cell.lifetimeRange = 0.8
-        self.cell.velocity = 18.0
-        self.cell.velocityRange = 6.0
-        self.cell.emissionLongitude = .pi * 0.5
-        self.cell.emissionRange = 0.12
+        self.cell.lifetime = 4.5
+        self.cell.lifetimeRange = 0.6
+        // Keep horizontal velocity at zero and use only downward gravity.
+        self.cell.velocity = 0.0
+        self.cell.velocityRange = 0.0
+        self.cell.xAcceleration = 0.0
+        self.cell.yAcceleration = 24.0
+        self.cell.emissionRange = 0.0
         self.cell.scale = 0.6
         self.cell.scaleRange = 0.25
-        self.cell.alphaSpeed = -0.05
+        self.cell.alphaSpeed = -0.12
 
         self.emitter.emitterShape = .line
         self.emitter.emitterMode = .surface
@@ -91,7 +93,9 @@ private final class AyuChatListPreviewSnowView: UIView {
         self.layer.addSublayer(self.emitter)
 
         self.fadeMask.colors = [UIColor.clear.cgColor, UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
-        self.fadeMask.locations = [0.0, 0.1, 0.68, 1.0]
+        self.fadeMask.startPoint = CGPoint(x: 0.5, y: 0.0)
+        self.fadeMask.endPoint = CGPoint(x: 0.5, y: 1.0)
+        self.fadeMask.locations = [0.0, 0.08, 0.72, 1.0]
         self.layer.mask = self.fadeMask
     }
 
@@ -106,7 +110,7 @@ private final class AyuChatListPreviewSnowView: UIView {
         self.currentIsDark = isDark
         let size = CGSize(width: 5.0, height: 5.0)
         UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
-        (isDark ? UIColor.white.withAlphaComponent(0.82) : UIColor.black.withAlphaComponent(0.52)).setFill()
+        (isDark ? UIColor.white : UIColor.black).setFill()
         UIBezierPath(ovalIn: CGRect(x: 1.0, y: 1.0, width: 3.0, height: 3.0)).fill()
         self.cell.contents = UIGraphicsGetImageFromCurrentImageContext()?.cgImage
         UIGraphicsEndImageContext()

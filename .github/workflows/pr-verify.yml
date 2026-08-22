@@ -69,6 +69,11 @@ jobs:
           grep -q 'AYU_CHAT_AVATAR_ROUNDING_v2' submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageDateHeader.swift
           grep -q 'AyuGramAppIcon.png' Telegram/Telegram-iOS/DefaultAppIcon.xcassets/AppIconLLC.appiconset/Contents.json
           test -f Telegram/Telegram-iOS/DefaultAppIcon.xcassets/AppIconLLC.appiconset/AyuGramAppIcon.png
+          grep -Fq '    app_icons = [],' Telegram/BUILD
+          grep -Fq '        ":DefaultAppIcon",' Telegram/BUILD
+          grep -Fq 'self.cell.xAcceleration = 0.0' submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListNavigationBar.swift
+          grep -Fq 'self.cell.yAcceleration = 24.0' submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListNavigationBar.swift
+          grep -Fq 'let color = isDark ? UIColor.white : UIColor.black' submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListNavigationBar.swift
           grep -Fq 'let entries: [AyuMainEntry] = [.header, .ghost, .customization, .spy]' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
           grep -q 'AYU_THEME_STOCK_ROUTING_RECOVERY_v4' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'automaticThemeSwitchSetting.trigger = .system' submodules/TelegramUI/Sources/SharedAccountContext.swift
