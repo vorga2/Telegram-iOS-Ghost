@@ -51,7 +51,7 @@ jobs:
           grep -q 'ayuExteraSettingsController(context: context)' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift
           grep -q 'AYU_AVATAR_ROUNDING_v1' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift
           grep -q 'guard defaults.object(forKey: avatarCornerPercentKey) != nil else { return 100 }' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift
-          grep -Fq 'let entries: [AyuExteraEntry] = [.header, .appearance, .chats]' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
+          grep -Fq 'let entries: [AyuExteraEntry] = [.header, .essentials, .appearance, .chats]' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
           grep -q 'title: "Единое закругление"' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
           grep -q 'final class AyuAvatarRoundingItem' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuAvatarRoundingItem.swift
           grep -q 'public func ayuAvatarCornerRadius' submodules/AvatarNode/Sources/AvatarNode.swift
