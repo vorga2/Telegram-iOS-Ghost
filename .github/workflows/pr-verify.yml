@@ -69,8 +69,7 @@ jobs:
           grep -q 'AYU_CHAT_AVATAR_ROUNDING_v2' submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageDateHeader.swift
           grep -q 'AyuGramAppIcon.png' Telegram/Telegram-iOS/DefaultAppIcon.xcassets/AppIconLLC.appiconset/Contents.json
           test -f Telegram/Telegram-iOS/DefaultAppIcon.xcassets/AppIconLLC.appiconset/AyuGramAppIcon.png
-          grep -Fq '    app_icons = [],' Telegram/BUILD
-          grep -Fq '        ":DefaultAppIcon",' Telegram/BUILD
+          grep -Fq '"solid": "srgb:0.16863,0.13333,0.25882,1.00000"' Telegram/Telegram-iOS/Telegram.icon/icon.json
           grep -Fq 'self.cell.xAcceleration = 0.0' submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListNavigationBar.swift
           grep -Fq 'self.cell.yAcceleration = 24.0' submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListNavigationBar.swift
           grep -Fq 'let color = isDark ? UIColor.white : UIColor.black' submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListNavigationBar.swift

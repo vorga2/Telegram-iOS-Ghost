@@ -41,7 +41,10 @@ def main() -> int:
     composer_assets.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, composer_assets / "AyuGram.png")
     composer = {
-        "fill": "system-light",
+        # Match the bitmap's outer #2b2242 pixels. Icon Composer slightly
+        # insets imported full-canvas artwork; a matching solid fill prevents
+        # its default white background from appearing as a rim at that inset.
+        "fill": {"solid": "srgb:0.16863,0.13333,0.25882,1.00000"},
         "groups": [
             {
                 "blend-mode": "normal",
@@ -78,21 +81,6 @@ def main() -> int:
         "supported-platforms": {"circles": ["watchOS"], "squares": "shared"},
     }
     (composer_dir / "icon.json").write_text(json.dumps(composer, indent=2) + "\n", encoding="utf-8")
-
-    # Icon Composer adds a system glass rim to the outer edge even when the
-    # artwork layer has glass/specular disabled. Use the classic asset catalog
-    # as the primary icon so the supplied bitmap is rendered without that rim.
-    build_file = root / "Telegram/BUILD"
-    build_text = build_file.read_text(encoding="utf-8")
-    composer_icons = '    app_icons = [ ":{}_icon".format(name) for name in composer_icon_folders ],\n'
-    if composer_icons not in build_text:
-        raise RuntimeError("Telegram BUILD primary icon anchor missing")
-    build_text = build_text.replace(composer_icons, "    app_icons = [],\n", 1)
-    disabled_catalog = '        #":DefaultAppIcon",\n'
-    if disabled_catalog not in build_text:
-        raise RuntimeError("Telegram BUILD legacy icon resource anchor missing")
-    build_text = build_text.replace(disabled_catalog, '        ":DefaultAppIcon",\n', 1)
-    build_file.write_text(build_text, encoding="utf-8")
 
     # Register the same artwork in Telegram's stock icon picker. It is the
     # primary icon (nil alternate-icon name), so it must be the first and only
@@ -136,9 +124,8 @@ def main() -> int:
         raise RuntimeError("AyuGram app icon catalog incomplete")
     if 'PresentationAppIcon(name: "AyuGram", imageName: "AyuGramIcon", isDefault: true)' not in app_delegate.read_text(encoding="utf-8"):
         raise RuntimeError("AyuGram default picker entry missing")
-    final_build_text = build_file.read_text(encoding="utf-8")
-    if "    app_icons = []," not in final_build_text or '        ":DefaultAppIcon",' not in final_build_text:
-        raise RuntimeError("rim-free classic primary app icon is not enabled")
+    if '"solid": "srgb:0.16863,0.13333,0.25882,1.00000"' not in (composer_dir / "icon.json").read_text(encoding="utf-8"):
+        raise RuntimeError("rim-free matching Icon Composer fill is missing")
     print("[ayu-app-icon] AyuGram artwork is the primary icon and first stock-picker default")
     return 0
 
