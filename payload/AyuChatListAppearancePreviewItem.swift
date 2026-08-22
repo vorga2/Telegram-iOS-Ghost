@@ -74,17 +74,17 @@ private final class AyuChatListPreviewSnowView: UIView {
         self.isUserInteractionEnabled = false
         self.clipsToBounds = true
 
-        self.cell.birthRate = 12.0
-        self.cell.lifetime = 4.5
-        self.cell.lifetimeRange = 0.6
+        self.cell.birthRate = 5.0
+        self.cell.lifetime = 3.0
+        self.cell.lifetimeRange = 0.35
         // Keep horizontal velocity at zero and use only downward gravity.
         self.cell.velocity = 0.0
         self.cell.velocityRange = 0.0
         self.cell.xAcceleration = 0.0
         self.cell.yAcceleration = 24.0
         self.cell.emissionRange = 0.0
-        self.cell.scale = 0.6
-        self.cell.scaleRange = 0.25
+        self.cell.scale = 0.5
+        self.cell.scaleRange = 0.12
         self.cell.alphaSpeed = -0.12
 
         self.emitter.emitterShape = .line
@@ -95,7 +95,7 @@ private final class AyuChatListPreviewSnowView: UIView {
         self.fadeMask.colors = [UIColor.clear.cgColor, UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
         self.fadeMask.startPoint = CGPoint(x: 0.5, y: 0.0)
         self.fadeMask.endPoint = CGPoint(x: 0.5, y: 1.0)
-        self.fadeMask.locations = [0.0, 0.08, 0.72, 1.0]
+        self.fadeMask.locations = [0.0, 0.12, 0.55, 1.0]
         self.layer.mask = self.fadeMask
     }
 
@@ -108,10 +108,10 @@ private final class AyuChatListPreviewSnowView: UIView {
             return
         }
         self.currentIsDark = isDark
-        let size = CGSize(width: 5.0, height: 5.0)
+        let size = CGSize(width: 4.0, height: 4.0)
         UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
         (isDark ? UIColor.white : UIColor.black).setFill()
-        UIBezierPath(ovalIn: CGRect(x: 1.0, y: 1.0, width: 3.0, height: 3.0)).fill()
+        UIBezierPath(ovalIn: CGRect(x: 1.0, y: 1.0, width: 2.0, height: 2.0)).fill()
         self.cell.contents = UIGraphicsGetImageFromCurrentImageContext()?.cgImage
         UIGraphicsEndImageContext()
         self.emitter.emitterCells = [self.cell]
@@ -188,7 +188,7 @@ private final class AyuChatListAppearancePreviewItemNode: ListViewItemNode {
                 self.previewCard.insertSubview(snowView, belowSubview: titleView)
             }
             snowView.update(isDark: item.theme.overallDarkAppearance)
-            snowView.frame = self.previewCard.bounds
+            snowView.frame = CGRect(x: 0.0, y: 0.0, width: self.previewCard.bounds.width, height: min(54.0, self.previewCard.bounds.height))
             snowView.isHidden = false
         } else {
             self.snowView?.isHidden = true

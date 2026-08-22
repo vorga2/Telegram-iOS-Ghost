@@ -509,10 +509,10 @@ private final class AyuChatListSnowView: UIView {
     private var currentIsDark: Bool?
 
     private static func particleImage(color: UIColor) -> CGImage? {
-        let imageSize = CGSize(width: 5.0, height: 5.0)
+        let imageSize = CGSize(width: 4.0, height: 4.0)
         UIGraphicsBeginImageContextWithOptions(imageSize, false, 0.0)
         color.setFill()
-        UIBezierPath(ovalIn: CGRect(x: 1.0, y: 1.0, width: 3.0, height: 3.0)).fill()
+        UIBezierPath(ovalIn: CGRect(x: 1.0, y: 1.0, width: 2.0, height: 2.0)).fill()
         let image = UIGraphicsGetImageFromCurrentImageContext()?.cgImage
         UIGraphicsEndImageContext()
         return image
@@ -523,9 +523,9 @@ private final class AyuChatListSnowView: UIView {
         self.isUserInteractionEnabled = false
         self.clipsToBounds = true
 
-        self.cell.birthRate = 18.0
-        self.cell.lifetime = 7.5
-        self.cell.lifetimeRange = 1.0
+        self.cell.birthRate = 7.0
+        self.cell.lifetime = 3.2
+        self.cell.lifetimeRange = 0.4
         // Gravity, rather than an emission angle, guarantees a vertical path
         // in the layer's coordinate system and leaves no horizontal velocity.
         self.cell.velocity = 0.0
@@ -533,8 +533,8 @@ private final class AyuChatListSnowView: UIView {
         self.cell.xAcceleration = 0.0
         self.cell.yAcceleration = 24.0
         self.cell.emissionRange = 0.0
-        self.cell.scale = 0.65
-        self.cell.scaleRange = 0.3
+        self.cell.scale = 0.55
+        self.cell.scaleRange = 0.15
         self.cell.alphaSpeed = -0.075
         self.cell.spinRange = .pi
 
@@ -551,7 +551,7 @@ private final class AyuChatListSnowView: UIView {
         ]
         self.fadeMask.startPoint = CGPoint(x: 0.5, y: 0.0)
         self.fadeMask.endPoint = CGPoint(x: 0.5, y: 1.0)
-        self.fadeMask.locations = [0.0, 0.08, 0.72, 1.0]
+        self.fadeMask.locations = [0.0, 0.12, 0.55, 1.0]
         self.layer.mask = self.fadeMask
         self.update(isDark: true)
     }
@@ -639,7 +639,8 @@ public final class ChatListNavigationBar: Component {
                 }
                 snowView.update(isDark: component.theme.overallDarkAppearance)
                 let navigationHeight = self.currentLayout?.size.height ?? self.bounds.height
-                snowView.frame = CGRect(x: 0.0, y: component.statusBarHeight, width: self.bounds.width, height: max(53.0, navigationHeight - component.statusBarHeight))
+                let availableTitleHeight = max(0.0, navigationHeight - component.statusBarHeight)
+                snowView.frame = CGRect(x: 0.0, y: component.statusBarHeight, width: self.bounds.width, height: min(54.0, availableTitleHeight))
                 snowView.isHidden = false
             } else if let snowView = self.ayuSnowView {
                 snowView.isHidden = true
