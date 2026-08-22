@@ -30,6 +30,7 @@ PATCHERS = (
     "apply_ayu_chat_camera_ghost.py",
     "apply_ayu_avatar_rounding.py",
     "apply_ayu_chat_avatar_rounding.py",
+    "apply_ayu_avatar_rounding_v3.py",
     "apply_ayu_spy_edit_history.py",
     "apply_ayu_spy_read_dates.py",
     "apply_ayu_spy_details.py",

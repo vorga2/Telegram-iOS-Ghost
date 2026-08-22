@@ -59,7 +59,13 @@ jobs:
           grep -q 'AYU_CHAT_AVATAR_ROUNDING_v2' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift
           grep -q 'guard defaults.object(forKey: chatAvatarCornerPercentKey) != nil else { return 100 }' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift
           grep -q 'case chatRounding(Int32)' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
-          grep -q 'isChat: true' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
+          grep -q 'AYU_AVATAR_ROUNDING_SCOPES_v3' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift
+          grep -q 'guard defaults.object(forKey: profileAvatarCornerPercentKey) != nil else { return 100 }' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift
+          grep -q 'preview: .chatList' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
+          grep -q 'preview: .chatMessage' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
+          grep -q 'preview: .profile' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
+          grep -q 'ayuRefreshVisibleAvatarRounding()' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
+          grep -q '.ayuSetRoundingScope(.chatList(isForum: isForumAvatar)' submodules/ChatListUI/Sources/Node/ChatListItem.swift
           grep -q 'AYU_CHAT_AVATAR_ROUNDING_v2' submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageDateHeader.swift
           grep -q 'AyuGramAppIcon.png' Telegram/Telegram-iOS/DefaultAppIcon.xcassets/AppIconLLC.appiconset/Contents.json
           test -f Telegram/Telegram-iOS/DefaultAppIcon.xcassets/AppIconLLC.appiconset/AyuGramAppIcon.png
