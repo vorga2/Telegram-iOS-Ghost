@@ -256,6 +256,7 @@ def patch_chat_list_controller(path: Path) -> None:
         guard case .chatList(.root) = self.location else {
             return
         }
+        self.primaryContext?.ayuRefreshAppearance()
         self.reloadFilters()
         self.requestLayout(transition: .immediate)
     }
@@ -304,9 +305,53 @@ def patch_chat_list_controller(path: Path) -> None:
                         filterItems.append(.filter(id: id, text: title, unread: ChatListFilterTabEntryUnreadCount(value: unreadCount, hasUnmuted: hasUnmutedUnread)))
 ''',
         '''                    case let .filter(id, title, emoticon, _):
-                        filterItems.append(.filter(id: id, text: strongSelf.ayuFolderTabTitle(title, emoticon: emoticon), unread: ChatListFilterTabEntryUnreadCount(value: unreadCount, hasUnmuted: hasUnmutedUnread)))
+                        let ayuUnreadCount = AyuRuntimeSettings.folderUnreadBadge ? unreadCount : 0
+                        filterItems.append(.filter(id: id, text: strongSelf.ayuFolderTabTitle(title, emoticon: emoticon), unread: ChatListFilterTabEntryUnreadCount(value: ayuUnreadCount, hasUnmuted: hasUnmutedUnread)))
 ''',
         "folder title application",
+    )
+    text = one(
+        text,
+        '''    private(set) var chatListTitle: NetworkStatusTitle?
+    
+    var leftButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
+''',
+        '''    private(set) var chatListTitle: NetworkStatusTitle?
+    private var ayuRootPeerStatus: NetworkStatusTitle.Status?
+
+    func ayuRefreshAppearance() {
+        guard case .chatList(.root) = self.location, var title = self.chatListTitle else {
+            return
+        }
+        if !title.activity {
+            title.text = AyuRuntimeSettings.chatListHeaderTitle
+        }
+        title.peerStatus = AyuRuntimeSettings.chatListHideStatus ? nil : self.ayuRootPeerStatus
+        self.chatListTitle = title
+    }
+    
+    var leftButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
+''',
+        "root title model refresh",
+    )
+    text = one(
+        text,
+        '''            self.chatListTitle = titleContent
+            
+            if case .chatList(.root) = self.location, checkProxy {
+''',
+        '''            if case .chatList(.root) = self.location {
+                self.ayuRootPeerStatus = peerStatus
+                if !titleContent.activity {
+                    titleContent.text = AyuRuntimeSettings.chatListHeaderTitle
+                }
+                titleContent.peerStatus = AyuRuntimeSettings.chatListHideStatus ? nil : peerStatus
+            }
+            self.chatListTitle = titleContent
+            
+            if case .chatList(.root) = self.location, checkProxy {
+''',
+        "root title model",
     )
     path.write_text(text, encoding="utf-8")
 
@@ -459,37 +504,40 @@ def patch_navigation_bar(path: Path) -> None:
 // display link, timer, Swift particle loop or scroll callback is used.
 private final class AyuChatListSnowView: UIView {
     private let emitter = CAEmitterLayer()
+    private let cell = CAEmitterCell()
     private let fadeMask = CAGradientLayer()
+    private var currentIsDark: Bool?
+
+    private static func particleImage(color: UIColor) -> CGImage? {
+        let imageSize = CGSize(width: 5.0, height: 5.0)
+        UIGraphicsBeginImageContextWithOptions(imageSize, false, 0.0)
+        color.setFill()
+        UIBezierPath(ovalIn: CGRect(x: 1.0, y: 1.0, width: 3.0, height: 3.0)).fill()
+        let image = UIGraphicsGetImageFromCurrentImageContext()?.cgImage
+        UIGraphicsEndImageContext()
+        return image
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         self.isUserInteractionEnabled = false
         self.clipsToBounds = true
 
-        let imageSize = CGSize(width: 4.0, height: 4.0)
-        UIGraphicsBeginImageContextWithOptions(imageSize, false, 0.0)
-        UIColor.white.withAlphaComponent(0.9).setFill()
-        UIBezierPath(ovalIn: CGRect(x: 1.0, y: 1.0, width: 2.0, height: 2.0)).fill()
-        let image = UIGraphicsGetImageFromCurrentImageContext()?.cgImage
-        UIGraphicsEndImageContext()
-
-        let cell = CAEmitterCell()
-        cell.contents = image
-        cell.birthRate = 8.0
-        cell.lifetime = 5.5
-        cell.lifetimeRange = 1.0
-        cell.velocity = 16.0
-        cell.velocityRange = 6.0
-        cell.emissionLongitude = -.pi * 0.5
-        cell.emissionRange = 0.18
-        cell.scale = 0.6
-        cell.scaleRange = 0.25
-        cell.alphaSpeed = -0.06
-        cell.spinRange = .pi
+        self.cell.birthRate = 18.0
+        self.cell.lifetime = 10.5
+        self.cell.lifetimeRange = 1.5
+        self.cell.velocity = 30.0
+        self.cell.velocityRange = 9.0
+        self.cell.emissionLongitude = .pi * 0.5
+        self.cell.emissionRange = 0.12
+        self.cell.scale = 0.65
+        self.cell.scaleRange = 0.3
+        self.cell.alphaSpeed = -0.035
+        self.cell.spinRange = .pi
 
         self.emitter.emitterShape = .line
         self.emitter.emitterMode = .surface
-        self.emitter.emitterCells = [cell]
+        self.emitter.emitterCells = [self.cell]
         self.layer.addSublayer(self.emitter)
 
         self.fadeMask.colors = [
@@ -498,18 +546,29 @@ private final class AyuChatListSnowView: UIView {
             UIColor.black.cgColor,
             UIColor.clear.cgColor
         ]
-        self.fadeMask.locations = [0.0, 0.24, 0.72, 1.0]
+        self.fadeMask.locations = [0.0, 0.1, 0.68, 1.0]
         self.layer.mask = self.fadeMask
+        self.update(isDark: true)
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
+    func update(isDark: Bool) {
+        guard self.currentIsDark != isDark else {
+            return
+        }
+        self.currentIsDark = isDark
+        let color = isDark ? UIColor.white.withAlphaComponent(0.82) : UIColor.black.withAlphaComponent(0.52)
+        self.cell.contents = AyuChatListSnowView.particleImage(color: color)
+        self.emitter.emitterCells = [self.cell]
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         self.emitter.frame = self.bounds
-        self.emitter.emitterPosition = CGPoint(x: self.bounds.midX, y: self.bounds.maxY + 1.0)
+        self.emitter.emitterPosition = CGPoint(x: self.bounds.midX, y: -1.0)
         self.emitter.emitterSize = CGSize(width: self.bounds.width, height: 1.0)
         self.fadeMask.frame = self.bounds
     }
@@ -573,7 +632,9 @@ public final class ChatListNavigationBar: Component {
                         self.addSubview(snowView)
                     }
                 }
-                snowView.frame = CGRect(x: 0.0, y: component.statusBarHeight, width: self.bounds.width, height: 53.0)
+                snowView.update(isDark: component.theme.overallDarkAppearance)
+                let navigationHeight = self.currentLayout?.size.height ?? self.bounds.height
+                snowView.frame = CGRect(x: 0.0, y: component.statusBarHeight, width: self.bounds.width, height: max(53.0, navigationHeight - component.statusBarHeight))
                 snowView.isHidden = false
             } else if let snowView = self.ayuSnowView {
                 snowView.isHidden = true
@@ -610,7 +671,6 @@ public final class ChatListNavigationBar: Component {
         '''            guard let component = self.component, let currentLayout = self.currentLayout else {
                 return
             }
-            let ayuStorySubscriptions = AyuRuntimeSettings.chatListHideStories ? nil : component.storySubscriptions
             
             let themeUpdated = component.theme !== self.scrollTheme || component.strings !== self.scrollStrings
 ''',
@@ -619,7 +679,7 @@ public final class ChatListNavigationBar: Component {
     text = one(
         text,
         "            if allowAvatarsExpansion, transition.animation.isImmediate, let storySubscriptions = component.storySubscriptions, !storySubscriptions.items.isEmpty {\n",
-        "            if allowAvatarsExpansion, transition.animation.isImmediate, let storySubscriptions = ayuStorySubscriptions, !storySubscriptions.items.isEmpty {\n",
+        "            let ayuStorySubscriptions = AyuRuntimeSettings.chatListHideStories && storiesOffsetFraction < 0.01 ? nil : component.storySubscriptions\n\n            if allowAvatarsExpansion, transition.animation.isImmediate, let storySubscriptions = ayuStorySubscriptions, !storySubscriptions.items.isEmpty {\n",
         "hidden stories haptic",
     )
     text = one(
@@ -760,7 +820,7 @@ private enum AyuAppearanceEntry: ItemListNodeEntry {
     case chatRounding(Int32)
     case profileRounding(Int32)
     case chatListHeader
-    case chatListPreview(String, NetworkStatusTitle.Status?)
+    case chatListPreview(String, NetworkStatusTitle.Status?, Bool)
     case forceSnow(Bool)
     case hideStatus(Bool)
     case hideStories(Bool)
@@ -824,8 +884,8 @@ private enum AyuAppearanceEntry: ItemListNodeEntry {
             return AyuAvatarRoundingItem(theme: presentationData.theme, value: value, preview: .profile, sectionId: self.section, updated: arguments.updateProfileCornerPercent)
         case .chatListHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "СПИСОК ЧАТОВ", sectionId: self.section)
-        case let .chatListPreview(title, status):
-            return AyuChatListAppearancePreviewItem(context: arguments.context, theme: presentationData.theme, strings: presentationData.strings, preview: .header(title: title, status: status), sectionId: self.section)
+        case let .chatListPreview(title, status, snow):
+            return AyuChatListAppearancePreviewItem(context: arguments.context, theme: presentationData.theme, strings: presentationData.strings, preview: .header(title: title, status: status, snow: snow), sectionId: self.section)
         case let .forceSnow(value):
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Принудительный снег", value: value, sectionId: self.section, style: .blocks, updated: arguments.updateForceSnow)
         case let .hideStatus(value):
@@ -979,7 +1039,7 @@ private func ayuExteraAppearanceSettingsController(context: AccountContext) -> V
             .chatRounding(AyuRuntimeSettings.chatAvatarCornerPercent),
             .profileRounding(AyuRuntimeSettings.profileAvatarCornerPercent),
             .chatListHeader,
-            .chatListPreview(AyuRuntimeSettings.chatListHeaderTitle, AyuRuntimeSettings.chatListHideStatus ? nil : peerStatus),
+            .chatListPreview(AyuRuntimeSettings.chatListHeaderTitle, AyuRuntimeSettings.chatListHideStatus ? nil : peerStatus, AyuRuntimeSettings.chatListForceSnow),
             .forceSnow(AyuRuntimeSettings.chatListForceSnow),
             .hideStatus(AyuRuntimeSettings.chatListHideStatus),
             .hideStories(AyuRuntimeSettings.chatListHideStories),

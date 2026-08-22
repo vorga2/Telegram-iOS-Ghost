@@ -16,7 +16,7 @@ struct AyuFolderPreview: Equatable {
 }
 
 enum AyuChatListAppearancePreview: Equatable {
-    case header(title: String, status: NetworkStatusTitle.Status?)
+    case header(title: String, status: NetworkStatusTitle.Status?, snow: Bool)
     case folders(items: [AyuFolderPreview], mode: Int32, showUnread: Bool)
 }
 
@@ -63,6 +63,65 @@ final class AyuChatListAppearancePreviewItem: ListViewItem, ItemListItem {
     }
 }
 
+private final class AyuChatListPreviewSnowView: UIView {
+    private let emitter = CAEmitterLayer()
+    private let cell = CAEmitterCell()
+    private let fadeMask = CAGradientLayer()
+    private var currentIsDark: Bool?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        self.isUserInteractionEnabled = false
+        self.clipsToBounds = true
+
+        self.cell.birthRate = 12.0
+        self.cell.lifetime = 4.0
+        self.cell.lifetimeRange = 0.8
+        self.cell.velocity = 18.0
+        self.cell.velocityRange = 6.0
+        self.cell.emissionLongitude = .pi * 0.5
+        self.cell.emissionRange = 0.12
+        self.cell.scale = 0.6
+        self.cell.scaleRange = 0.25
+        self.cell.alphaSpeed = -0.05
+
+        self.emitter.emitterShape = .line
+        self.emitter.emitterMode = .surface
+        self.emitter.emitterCells = [self.cell]
+        self.layer.addSublayer(self.emitter)
+
+        self.fadeMask.colors = [UIColor.clear.cgColor, UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
+        self.fadeMask.locations = [0.0, 0.1, 0.68, 1.0]
+        self.layer.mask = self.fadeMask
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func update(isDark: Bool) {
+        guard self.currentIsDark != isDark else {
+            return
+        }
+        self.currentIsDark = isDark
+        let size = CGSize(width: 5.0, height: 5.0)
+        UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
+        (isDark ? UIColor.white.withAlphaComponent(0.82) : UIColor.black.withAlphaComponent(0.52)).setFill()
+        UIBezierPath(ovalIn: CGRect(x: 1.0, y: 1.0, width: 3.0, height: 3.0)).fill()
+        self.cell.contents = UIGraphicsGetImageFromCurrentImageContext()?.cgImage
+        UIGraphicsEndImageContext()
+        self.emitter.emitterCells = [self.cell]
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        self.emitter.frame = self.bounds
+        self.emitter.emitterPosition = CGPoint(x: self.bounds.midX, y: -1.0)
+        self.emitter.emitterSize = CGSize(width: self.bounds.width, height: 1.0)
+        self.fadeMask.frame = self.bounds
+    }
+}
+
 private final class AyuChatListAppearancePreviewItemNode: ListViewItemNode {
     private let backgroundNode = ASDisplayNode()
     private let topStripeNode = ASDisplayNode()
@@ -70,6 +129,7 @@ private final class AyuChatListAppearancePreviewItemNode: ListViewItemNode {
     private let maskNode = ASImageNode()
     private let previewCard = UIView()
     private var titleView: ChatListTitleView?
+    private var snowView: AyuChatListPreviewSnowView?
     private var folderViews: [UIView] = []
 
     init() {
@@ -94,7 +154,7 @@ private final class AyuChatListAppearancePreviewItemNode: ListViewItemNode {
         self.folderViews.removeAll()
     }
 
-    private func updateHeader(item: AyuChatListAppearancePreviewItem, frame: CGRect, title: String, status: NetworkStatusTitle.Status?) {
+    private func updateHeader(item: AyuChatListAppearancePreviewItem, frame: CGRect, title: String, status: NetworkStatusTitle.Status?, snow: Bool) {
         self.clearFolders()
         let titleView: ChatListTitleView
         if let current = self.titleView {
@@ -114,6 +174,21 @@ private final class AyuChatListAppearancePreviewItemNode: ListViewItemNode {
             self.titleView = titleView
         }
         titleView.isHidden = false
+        if snow {
+            let snowView: AyuChatListPreviewSnowView
+            if let current = self.snowView {
+                snowView = current
+            } else {
+                snowView = AyuChatListPreviewSnowView()
+                self.snowView = snowView
+                self.previewCard.insertSubview(snowView, belowSubview: titleView)
+            }
+            snowView.update(isDark: item.theme.overallDarkAppearance)
+            snowView.frame = self.previewCard.bounds
+            snowView.isHidden = false
+        } else {
+            self.snowView?.isHidden = true
+        }
         titleView.title = NetworkStatusTitle(
             text: title,
             activity: false,
@@ -227,8 +302,8 @@ private final class AyuChatListAppearancePreviewItemNode: ListViewItemNode {
                 self.previewCard.frame = CGRect(x: left, y: 12.0, width: width, height: 70.0)
                 self.previewCard.backgroundColor = item.theme.list.itemHighlightedBackgroundColor
                 switch item.preview {
-                case let .header(title, status):
-                    self.updateHeader(item: item, frame: CGRect(x: 10.0, y: 10.0, width: width - 20.0, height: 50.0), title: title, status: status)
+                case let .header(title, status, snow):
+                    self.updateHeader(item: item, frame: CGRect(x: 10.0, y: 10.0, width: width - 20.0, height: 50.0), title: title, status: status, snow: snow)
                 case let .folders(folders, mode, showUnread):
                     self.updateFolders(item: item, folders: folders, mode: mode, showUnread: showUnread, frame: CGRect(x: 8.0, y: 15.0, width: width - 16.0, height: 40.0))
                 }

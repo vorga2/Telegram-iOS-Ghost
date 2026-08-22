@@ -65,7 +65,7 @@ def main() -> int:
     if CHAT_MARK not in chat:
         chat = one(chat, '''            if groupId == .root {\n                title = self.presentationData.strings.DialogList_Title\n            } else {\n''', f'''            if groupId == .root {{\n                // {CHAT_MARK}\n                title = "AyuGram"\n            }} else {{\n''', "initial root title")
         chat = one(chat, '''            if groupId == .root {\n                defaultTitle = presentationData.strings.DialogList_Title\n            } else {\n''', '''            if groupId == .root {\n                defaultTitle = "AyuGram"\n            } else {\n''', "live root title")
-        chat = one(chat, '''            self.chatListTitle = titleContent\n''', '''            if case .chatList(.root) = self.location, !stateAndFilterId.state.editing, !titleContent.activity {\n                titleContent.text = "AyuGram"\n            }\n            self.chatListTitle = titleContent\n''', "final visible root title")
+        chat = one(chat, '''            self.chatListTitle = titleContent\n''', '''            if case .chatList(.root) = self.location, !stateAndFilterId.state.editing, !titleContent.activity {\n                titleContent.text = AyuRuntimeSettings.chatListHeaderTitle\n                titleContent.peerStatus = AyuRuntimeSettings.chatListHideStatus ? nil : peerStatus\n            }\n            self.chatListTitle = titleContent\n''', "final visible root title")
         chat_path.write_text(chat, encoding="utf-8")
 
     print("[ayu-branding-only] AyuGram names installed; theme and Liquid Glass untouched")
