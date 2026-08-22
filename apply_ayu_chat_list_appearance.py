@@ -48,7 +48,7 @@ public struct AyuRuntimeSnapshot: Equatable {
         '''    private static let profileAvatarCornerPercentKey = keyPrefix + "appearance.profileAvatarCornerPercent"
     private static let chatListForceSnowKey = keyPrefix + "appearance.chatListForceSnow"
     private static let chatListHideStatusKey = keyPrefix + "appearance.chatListHideStatus"
-    private static let chatListCenterTitleKey = keyPrefix + "appearance.chatListCenterTitle"
+    private static let chatListHideStoriesKey = keyPrefix + "appearance.chatListHideStories"
     private static let chatListTitleModeKey = keyPrefix + "appearance.chatListTitleMode"
     private static let folderTitleModeKey = keyPrefix + "appearance.folderTitleMode"
     private static let folderUnreadBadgeKey = keyPrefix + "appearance.folderUnreadBadge"
@@ -70,7 +70,7 @@ public struct AyuRuntimeSnapshot: Equatable {
     }())
     private static let chatListForceSnowState = Atomic<Bool>(value: UserDefaults.standard.bool(forKey: chatListForceSnowKey))
     private static let chatListHideStatusState = Atomic<Bool>(value: UserDefaults.standard.bool(forKey: chatListHideStatusKey))
-    private static let chatListCenterTitleState = Atomic<Bool>(value: UserDefaults.standard.bool(forKey: chatListCenterTitleKey))
+    private static let chatListHideStoriesState = Atomic<Bool>(value: UserDefaults.standard.bool(forKey: chatListHideStoriesKey))
     private static let chatListTitleModeState = Atomic<Int32>(value: Int32(UserDefaults.standard.integer(forKey: chatListTitleModeKey)))
     private static let folderTitleModeState = Atomic<Int32>(value: Int32(UserDefaults.standard.integer(forKey: folderTitleModeKey)))
     private static let folderUnreadBadgeState = Atomic<Bool>(value: {
@@ -96,7 +96,7 @@ public struct AyuRuntimeSnapshot: Equatable {
 
     public static var chatListForceSnow: Bool { chatListForceSnowState.with { $0 } }
     public static var chatListHideStatus: Bool { chatListHideStatusState.with { $0 } }
-    public static var chatListCenterTitle: Bool { chatListCenterTitleState.with { $0 } }
+    public static var chatListHideStories: Bool { chatListHideStoriesState.with { $0 } }
     public static var chatListTitleMode: Int32 { chatListTitleModeState.with { $0 } }
     public static var folderTitleMode: Int32 { folderTitleModeState.with { $0 } }
     public static var folderUnreadBadge: Bool { folderUnreadBadgeState.with { $0 } }
@@ -175,9 +175,9 @@ public struct AyuRuntimeSnapshot: Equatable {
         }
     }
 
-    public static func setChatListCenterTitle(_ value: Bool) {
-        if chatListCenterTitleState.swap(value) != value {
-            UserDefaults.standard.set(value, forKey: chatListCenterTitleKey)
+    public static func setChatListHideStories(_ value: Bool) {
+        if chatListHideStoriesState.swap(value) != value {
+            UserDefaults.standard.set(value, forKey: chatListHideStoriesKey)
             notifyChatListAppearanceChanged()
         }
     }
@@ -230,6 +230,84 @@ def patch_chat_list_controller(path: Path) -> None:
                 if let emojiStatus = user.emojiStatus {
 '''
     text = one(text, anchor, replacement, "account identity")
+    text = one(
+        text,
+        '''        super.init(context: context, navigationBarPresentationData: nil)
+        
+        self.accessoryPanelContainer = ASDisplayNode()
+''',
+        '''        super.init(context: context, navigationBarPresentationData: nil)
+
+        NotificationCenter.default.addObserver(self, selector: #selector(self.ayuChatListAppearanceChanged), name: AyuRuntimeSettings.chatListAppearanceDidChange, object: nil)
+        
+        self.accessoryPanelContainer = ASDisplayNode()
+''',
+        "chat list observer",
+    )
+    text = one(
+        text,
+        '''    required public init(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    deinit {
+''',
+        '''    @objc private func ayuChatListAppearanceChanged() {
+        guard case .chatList(.root) = self.location else {
+            return
+        }
+        self.reloadFilters()
+        self.requestLayout(transition: .immediate)
+    }
+
+    required public init(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+''',
+        "chat list refresh",
+    )
+    text = one(
+        text,
+        '''    private var initializedFilters = false
+    private func reloadFilters(firstUpdate: (() -> Void)? = nil) {
+''',
+        r'''    private func ayuFolderTabTitle(_ title: ChatFolderTitle, emoticon: String?) -> ChatFolderTitle {
+        switch AyuFolderTitleMode(rawValue: AyuRuntimeSettings.folderTitleMode) ?? .namesAndIcons {
+        case .namesAndIcons:
+            guard let emoticon, !emoticon.isEmpty else {
+                return title
+            }
+            let prefix = "\(emoticon) "
+            let offset = prefix.utf16.count
+            let entities = title.entities.map { entity in
+                MessageTextEntity(range: (entity.range.lowerBound + offset) ..< (entity.range.upperBound + offset), type: entity.type)
+            }
+            return ChatFolderTitle(text: prefix + title.text, entities: entities, enableAnimations: title.enableAnimations)
+        case .namesOnly:
+            return title
+        case .iconsOnly:
+            return ChatFolderTitle(text: (emoticon?.isEmpty == false ? emoticon! : "📁"), entities: [], enableAnimations: false)
+        }
+    }
+
+    private var initializedFilters = false
+    private func reloadFilters(firstUpdate: (() -> Void)? = nil) {
+''',
+        "folder title preparation",
+    )
+    text = one(
+        text,
+        '''                    case let .filter(id, title, _, _):
+                        filterItems.append(.filter(id: id, text: title, unread: ChatListFilterTabEntryUnreadCount(value: unreadCount, hasUnmuted: hasUnmutedUnread)))
+''',
+        '''                    case let .filter(id, title, emoticon, _):
+                        filterItems.append(.filter(id: id, text: strongSelf.ayuFolderTabTitle(title, emoticon: emoticon), unread: ChatListFilterTabEntryUnreadCount(value: unreadCount, hasUnmuted: hasUnmutedUnread)))
+''',
+        "folder title application",
+    )
     path.write_text(text, encoding="utf-8")
 
 
@@ -308,16 +386,67 @@ def patch_title_view(path: Path) -> None:
     text = one(
         text,
         "        let combinedWidth = titleSize.width\n",
-        '''        let ayuStatusWidth: CGFloat
-        if AyuRuntimeSettings.chatListCenterTitle && self.ayuRootTitleSource != nil && self.title.peerStatus != nil && !self.title.activity {
-            ayuStatusWidth = 24.0
-        } else {
-            ayuStatusWidth = 0.0
-        }
-        let combinedWidth = titleSize.width + ayuStatusWidth
-''',
+        "        let combinedWidth = titleSize.width\n",
         "smart title width",
     )
+    path.write_text(text, encoding="utf-8")
+
+
+def patch_header_component(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    if MARK in text:
+        return
+    text = one(
+        text,
+        '''                    if let chatListTitle = primaryContent.chatListTitle {
+                        primaryTitle = chatListTitle.text
+                        primaryTitleHasLock = chatListTitle.isPasscodeSet
+                        primaryTitleHasActivity = chatListTitle.activity
+                        if let peerStatus = chatListTitle.peerStatus {
+                            switch peerStatus {
+                            case .premium:
+                                primaryTitlePeerStatus = .premium
+                            case let .emoji(status):
+                                primaryTitlePeerStatus = .emoji(status)
+                            }
+                        }
+''',
+        '''                    if let chatListTitle = primaryContent.chatListTitle {
+                        let ayuIsRootTitle = !chatListTitle.activity && chatListTitle.text == "AyuGram"
+                        primaryTitle = ayuIsRootTitle ? AyuRuntimeSettings.chatListHeaderTitle : chatListTitle.text
+                        primaryTitleHasLock = chatListTitle.isPasscodeSet
+                        primaryTitleHasActivity = chatListTitle.activity
+                        if (!ayuIsRootTitle || !AyuRuntimeSettings.chatListHideStatus), let peerStatus = chatListTitle.peerStatus {
+                            switch peerStatus {
+                            case .premium:
+                                primaryTitlePeerStatus = .premium
+                            case let .emoji(status):
+                                primaryTitlePeerStatus = .emoji(status)
+                            }
+                        }
+''',
+        "stories title and status",
+    )
+    text = one(
+        text,
+        '''                    containerSize: CGSize(width: availableSize.width, height: ChatListNavigationBar.storiesScrollHeight)
+                )
+            }
+            
+            var secondaryContentTransition = transition
+''',
+        '''                    containerSize: CGSize(width: availableSize.width, height: ChatListNavigationBar.storiesScrollHeight)
+                )
+            } else if let storyPeerList = self.storyPeerList {
+                self.storyPeerList = nil
+                storyPeerList.view?.removeFromSuperview()
+            }
+            
+            var secondaryContentTransition = transition
+''',
+        "remove hidden stories view",
+    )
+    text = "// AYU_CHAT_LIST_APPEARANCE_v4\n" + text
     path.write_text(text, encoding="utf-8")
 
 
@@ -337,25 +466,25 @@ private final class AyuChatListSnowView: UIView {
         self.isUserInteractionEnabled = false
         self.clipsToBounds = true
 
-        let imageSize = CGSize(width: 8.0, height: 8.0)
+        let imageSize = CGSize(width: 4.0, height: 4.0)
         UIGraphicsBeginImageContextWithOptions(imageSize, false, 0.0)
         UIColor.white.withAlphaComponent(0.9).setFill()
-        UIBezierPath(ovalIn: CGRect(x: 1.0, y: 1.0, width: 6.0, height: 6.0)).fill()
+        UIBezierPath(ovalIn: CGRect(x: 1.0, y: 1.0, width: 2.0, height: 2.0)).fill()
         let image = UIGraphicsGetImageFromCurrentImageContext()?.cgImage
         UIGraphicsEndImageContext()
 
         let cell = CAEmitterCell()
         cell.contents = image
-        cell.birthRate = 10.0
-        cell.lifetime = 5.0
-        cell.lifetimeRange = 1.5
-        cell.velocity = 22.0
-        cell.velocityRange = 10.0
-        cell.emissionLongitude = .pi * 0.5
-        cell.emissionRange = 0.25
-        cell.scale = 0.55
-        cell.scaleRange = 0.35
-        cell.alphaSpeed = -0.12
+        cell.birthRate = 8.0
+        cell.lifetime = 5.5
+        cell.lifetimeRange = 1.0
+        cell.velocity = 16.0
+        cell.velocityRange = 6.0
+        cell.emissionLongitude = -.pi * 0.5
+        cell.emissionRange = 0.18
+        cell.scale = 0.6
+        cell.scaleRange = 0.25
+        cell.alphaSpeed = -0.06
         cell.spinRange = .pi
 
         self.emitter.emitterShape = .line
@@ -369,7 +498,7 @@ private final class AyuChatListSnowView: UIView {
             UIColor.black.cgColor,
             UIColor.clear.cgColor
         ]
-        self.fadeMask.locations = [0.0, 0.18, 0.78, 1.0]
+        self.fadeMask.locations = [0.0, 0.24, 0.72, 1.0]
         self.layer.mask = self.fadeMask
     }
 
@@ -380,7 +509,7 @@ private final class AyuChatListSnowView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         self.emitter.frame = self.bounds
-        self.emitter.emitterPosition = CGPoint(x: self.bounds.midX, y: -2.0)
+        self.emitter.emitterPosition = CGPoint(x: self.bounds.midX, y: self.bounds.maxY + 1.0)
         self.emitter.emitterSize = CGSize(width: self.bounds.width, height: 1.0)
         self.fadeMask.frame = self.bounds
     }
@@ -420,6 +549,10 @@ public final class ChatListNavigationBar: Component {
 
         @objc private func ayuChatListAppearanceChanged() {
             self.ayuUpdateSnow()
+            self.state?.updated(transition: .immediate)
+            if let rawScrollOffset = self.rawScrollOffset {
+                self.applyScroll(offset: rawScrollOffset, allowAvatarsExpansion: self.currentAllowAvatarsExpansion, forceUpdate: true, transition: .immediate)
+            }
         }
 
         private func ayuUpdateSnow() {
@@ -466,6 +599,41 @@ public final class ChatListNavigationBar: Component {
 ''',
         "snow layout",
     )
+    text = one(
+        text,
+        '''            guard let component = self.component, let currentLayout = self.currentLayout else {
+                return
+            }
+            
+            let themeUpdated = component.theme !== self.scrollTheme || component.strings !== self.scrollStrings
+''',
+        '''            guard let component = self.component, let currentLayout = self.currentLayout else {
+                return
+            }
+            let ayuStorySubscriptions = AyuRuntimeSettings.chatListHideStories ? nil : component.storySubscriptions
+            
+            let themeUpdated = component.theme !== self.scrollTheme || component.strings !== self.scrollStrings
+''',
+        "hidden stories source",
+    )
+    text = one(
+        text,
+        "            if allowAvatarsExpansion, transition.animation.isImmediate, let storySubscriptions = component.storySubscriptions, !storySubscriptions.items.isEmpty {\n",
+        "            if allowAvatarsExpansion, transition.animation.isImmediate, let storySubscriptions = ayuStorySubscriptions, !storySubscriptions.items.isEmpty {\n",
+        "hidden stories haptic",
+    )
+    text = one(
+        text,
+        '''                networkStatus: nil,
+                storySubscriptions: component.storySubscriptions,
+                storiesIncludeHidden: component.storiesIncludeHidden,
+''',
+        '''                networkStatus: nil,
+                storySubscriptions: ayuStorySubscriptions,
+                storiesIncludeHidden: component.storiesIncludeHidden,
+''',
+        "hidden stories header",
+    )
     path.write_text(text, encoding="utf-8")
 
 
@@ -476,37 +644,7 @@ def patch_folder_tabs(path: Path) -> None:
     helper_anchor = "private final class ItemNode: ASDisplayNode {\n"
     helper = r'''// AYU_CHAT_LIST_APPEARANCE_v4
 private func ayuFolderDisplayTitle(_ source: ChatFolderTitle, isAllChats: Bool) -> ChatFolderTitle {
-    switch AyuFolderTitleMode(rawValue: AyuRuntimeSettings.folderTitleMode) ?? .namesAndIcons {
-    case .namesAndIcons:
-        return source
-    case .namesOnly:
-        let text = NSMutableString(string: source.text)
-        let ranges = source.entities.compactMap { entity -> NSRange? in
-            if case .CustomEmoji = entity.type {
-                return NSRange(location: entity.range.lowerBound, length: entity.range.count)
-            }
-            return nil
-        }.sorted { $0.location > $1.location }
-        for range in ranges where NSMaxRange(range) <= text.length {
-            text.replaceCharacters(in: range, with: "")
-        }
-        let value = (text as String).trimmingCharacters(in: .whitespacesAndNewlines)
-        return ChatFolderTitle(text: value.isEmpty ? source.text : value, entities: [], enableAnimations: false)
-    case .iconsOnly:
-        if let entity = source.entities.first(where: {
-            if case .CustomEmoji = $0.type { return true }
-            return false
-        }) {
-            let range = NSRange(location: entity.range.lowerBound, length: entity.range.count)
-            let nsText = source.text as NSString
-            if NSMaxRange(range) <= nsText.length {
-                let iconText = nsText.substring(with: range)
-                let adjusted = MessageTextEntity(range: 0 ..< range.length, type: entity.type)
-                return ChatFolderTitle(text: iconText, entities: [adjusted], enableAnimations: source.enableAnimations)
-            }
-        }
-        return ChatFolderTitle(text: isAllChats ? "💬" : "📁", entities: [], enableAnimations: false)
-    }
+    return source
 }
 
 private final class ItemNode: ASDisplayNode {
@@ -586,12 +724,12 @@ private final class AyuAppearanceArguments {
     let updateProfileCornerPercent: (Int32) -> Void
     let updateForceSnow: (Bool) -> Void
     let updateHideStatus: (Bool) -> Void
-    let updateCenterTitle: (Bool) -> Void
+    let updateHideStories: (Bool) -> Void
     let selectTitleMode: () -> Void
     let selectFolderMode: () -> Void
     let updateFolderUnread: (Bool) -> Void
 
-    init(context: AccountContext, updateListCornerPercent: @escaping (Int32) -> Void, updateUnified: @escaping (Bool) -> Void, updateChatCornerPercent: @escaping (Int32) -> Void, updateProfileCornerPercent: @escaping (Int32) -> Void, updateForceSnow: @escaping (Bool) -> Void, updateHideStatus: @escaping (Bool) -> Void, updateCenterTitle: @escaping (Bool) -> Void, selectTitleMode: @escaping () -> Void, selectFolderMode: @escaping () -> Void, updateFolderUnread: @escaping (Bool) -> Void) {
+    init(context: AccountContext, updateListCornerPercent: @escaping (Int32) -> Void, updateUnified: @escaping (Bool) -> Void, updateChatCornerPercent: @escaping (Int32) -> Void, updateProfileCornerPercent: @escaping (Int32) -> Void, updateForceSnow: @escaping (Bool) -> Void, updateHideStatus: @escaping (Bool) -> Void, updateHideStories: @escaping (Bool) -> Void, selectTitleMode: @escaping () -> Void, selectFolderMode: @escaping () -> Void, updateFolderUnread: @escaping (Bool) -> Void) {
         self.context = context
         self.updateListCornerPercent = updateListCornerPercent
         self.updateUnified = updateUnified
@@ -599,7 +737,7 @@ private final class AyuAppearanceArguments {
         self.updateProfileCornerPercent = updateProfileCornerPercent
         self.updateForceSnow = updateForceSnow
         self.updateHideStatus = updateHideStatus
-        self.updateCenterTitle = updateCenterTitle
+        self.updateHideStories = updateHideStories
         self.selectTitleMode = selectTitleMode
         self.selectFolderMode = selectFolderMode
         self.updateFolderUnread = updateFolderUnread
@@ -622,13 +760,13 @@ private enum AyuAppearanceEntry: ItemListNodeEntry {
     case chatRounding(Int32)
     case profileRounding(Int32)
     case chatListHeader
-    case chatListPreview(NetworkStatusTitle.Status?)
+    case chatListPreview(String, NetworkStatusTitle.Status?)
     case forceSnow(Bool)
     case hideStatus(Bool)
-    case centerTitle(Bool)
+    case hideStories(Bool)
     case titleText(String)
     case foldersHeader
-    case foldersPreview([AyuFolderPreview])
+    case foldersPreview([AyuFolderPreview], Int32, Bool)
     case folderTitles(String)
     case folderUnread(Bool)
     case foldersInfo
@@ -638,7 +776,7 @@ private enum AyuAppearanceEntry: ItemListNodeEntry {
         case .avatarsHeader, .listRounding, .unified, .avatarInfo: return AyuAppearanceSection.avatars.rawValue
         case .chatRounding: return AyuAppearanceSection.chatAvatar.rawValue
         case .profileRounding: return AyuAppearanceSection.profileAvatar.rawValue
-        case .chatListHeader, .chatListPreview, .forceSnow, .hideStatus, .centerTitle, .titleText: return AyuAppearanceSection.chatList.rawValue
+        case .chatListHeader, .chatListPreview, .forceSnow, .hideStatus, .hideStories, .titleText: return AyuAppearanceSection.chatList.rawValue
         case .foldersHeader, .foldersPreview, .folderTitles, .folderUnread, .foldersInfo: return AyuAppearanceSection.folders.rawValue
         }
     }
@@ -655,7 +793,7 @@ private enum AyuAppearanceEntry: ItemListNodeEntry {
         case .chatListPreview: return 7
         case .forceSnow: return 8
         case .hideStatus: return 9
-        case .centerTitle: return 10
+        case .hideStories: return 10
         case .titleText: return 11
         case .foldersHeader: return 12
         case .foldersPreview: return 13
@@ -686,20 +824,20 @@ private enum AyuAppearanceEntry: ItemListNodeEntry {
             return AyuAvatarRoundingItem(theme: presentationData.theme, value: value, preview: .profile, sectionId: self.section, updated: arguments.updateProfileCornerPercent)
         case .chatListHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "СПИСОК ЧАТОВ", sectionId: self.section)
-        case let .chatListPreview(status):
-            return AyuChatListAppearancePreviewItem(context: arguments.context, theme: presentationData.theme, strings: presentationData.strings, preview: .header(status), sectionId: self.section)
+        case let .chatListPreview(title, status):
+            return AyuChatListAppearancePreviewItem(context: arguments.context, theme: presentationData.theme, strings: presentationData.strings, preview: .header(title: title, status: status), sectionId: self.section)
         case let .forceSnow(value):
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Принудительный снег", value: value, sectionId: self.section, style: .blocks, updated: arguments.updateForceSnow)
         case let .hideStatus(value):
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Скрыть статус", value: value, sectionId: self.section, style: .blocks, updated: arguments.updateHideStatus)
-        case let .centerTitle(value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Заголовок по центру", value: value, sectionId: self.section, style: .blocks, updated: arguments.updateCenterTitle)
+        case let .hideStories(value):
+            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Скрыть истории", value: value, sectionId: self.section, style: .blocks, updated: arguments.updateHideStories)
         case let .titleText(value):
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Текст в заголовке", label: value, sectionId: self.section, style: .blocks, action: arguments.selectTitleMode)
         case .foldersHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ПАПКИ С ЧАТАМИ", sectionId: self.section)
-        case let .foldersPreview(folders):
-            return AyuChatListAppearancePreviewItem(context: arguments.context, theme: presentationData.theme, strings: presentationData.strings, preview: .folders(folders), sectionId: self.section)
+        case let .foldersPreview(folders, mode, showUnread):
+            return AyuChatListAppearancePreviewItem(context: arguments.context, theme: presentationData.theme, strings: presentationData.strings, preview: .folders(items: folders, mode: mode, showUnread: showUnread), sectionId: self.section)
         case let .folderTitles(value):
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Заголовки папок", label: value, sectionId: self.section, style: .blocks, action: arguments.selectFolderMode)
         case let .folderUnread(value):
@@ -794,8 +932,8 @@ private func ayuExteraAppearanceSettingsController(context: AccountContext) -> V
             AyuRuntimeSettings.setChatListHideStatus(value)
             bump()
         },
-        updateCenterTitle: { value in
-            AyuRuntimeSettings.setChatListCenterTitle(value)
+        updateHideStories: { value in
+            AyuRuntimeSettings.setChatListHideStories(value)
             bump()
         },
         selectTitleMode: presentTitleMode,
@@ -841,13 +979,13 @@ private func ayuExteraAppearanceSettingsController(context: AccountContext) -> V
             .chatRounding(AyuRuntimeSettings.chatAvatarCornerPercent),
             .profileRounding(AyuRuntimeSettings.profileAvatarCornerPercent),
             .chatListHeader,
-            .chatListPreview(AyuRuntimeSettings.chatListHideStatus ? nil : peerStatus),
+            .chatListPreview(AyuRuntimeSettings.chatListHeaderTitle, AyuRuntimeSettings.chatListHideStatus ? nil : peerStatus),
             .forceSnow(AyuRuntimeSettings.chatListForceSnow),
             .hideStatus(AyuRuntimeSettings.chatListHideStatus),
-            .centerTitle(AyuRuntimeSettings.chatListCenterTitle),
+            .hideStories(AyuRuntimeSettings.chatListHideStories),
             .titleText(AyuRuntimeSettings.chatListTitleModeTitle),
             .foldersHeader,
-            .foldersPreview(folders),
+            .foldersPreview(folders, AyuRuntimeSettings.folderTitleMode, AyuRuntimeSettings.folderUnreadBadge),
             .folderTitles(AyuRuntimeSettings.folderTitleModeTitle),
             .folderUnread(AyuRuntimeSettings.folderUnreadBadge),
             .foldersInfo
@@ -882,6 +1020,7 @@ def main() -> int:
     patch_runtime(root / "submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift")
     patch_chat_list_controller(root / "submodules/ChatListUI/Sources/ChatListController.swift")
     patch_title_view(root / "submodules/TelegramUI/Components/ChatListTitleView/Sources/ChatListTitleView.swift")
+    patch_header_component(root / "submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListHeaderComponent.swift")
     patch_navigation_bar(root / "submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListNavigationBar.swift")
     patch_folder_tabs(root / "submodules/TelegramUI/Components/ChatList/ChatListFilterTabContainerNode/Sources/ChatListFilterTabContainerNode.swift")
     here = Path(__file__).resolve().parent
@@ -895,6 +1034,7 @@ def main() -> int:
         (root / "submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift", "chatListAppearanceDidChange"),
         (root / "submodules/ChatListUI/Sources/ChatListController.swift", "updateChatListIdentity"),
         (root / "submodules/TelegramUI/Components/ChatListTitleView/Sources/ChatListTitleView.swift", "ayuRootTitleSource"),
+        (root / "submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListHeaderComponent.swift", "ayuIsRootTitle"),
         (root / "submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListNavigationBar.swift", "CAEmitterLayer"),
         (root / "submodules/TelegramUI/Components/ChatList/ChatListFilterTabContainerNode/Sources/ChatListFilterTabContainerNode.swift", "ayuFolderDisplayTitle"),
         (root / "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift", "ПАПКИ С ЧАТАМИ"),

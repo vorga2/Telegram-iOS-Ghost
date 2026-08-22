@@ -34,6 +34,51 @@ def main() -> int:
     }
     (target / "Contents.json").write_text(json.dumps(contents, indent=2) + "\n", encoding="utf-8")
 
+    # Telegram's current BUILD uses the Icon Composer bundle below as the
+    # primary app icon; DefaultAppIcon.xcassets is intentionally commented out.
+    composer_dir = root / "Telegram/Telegram-iOS/Telegram.icon"
+    composer_assets = composer_dir / "Assets"
+    composer_assets.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, composer_assets / "AyuGram.png")
+    composer = {
+        "fill": "system-light",
+        "groups": [
+            {
+                "blend-mode": "normal",
+                "blur-material": 0,
+                "layers": [
+                    {
+                        "blend-mode-specializations": [
+                            {"value": "normal"},
+                            {"appearance": "dark", "value": "normal"},
+                        ],
+                        "glass": False,
+                        "image-name": "AyuGram.png",
+                        "name": "AyuGram",
+                        "position-specializations": [
+                            {
+                                "idiom": "watchOS",
+                                "value": {"scale": 1, "translation-in-points": [0, 0]},
+                            }
+                        ],
+                    }
+                ],
+                "lighting": "individual",
+                "position-specializations": [
+                    {
+                        "idiom": "watchOS",
+                        "value": {"scale": 1, "translation-in-points": [0, 0]},
+                    }
+                ],
+                "shadow": {"kind": "layer-color", "opacity": 0},
+                "specular": False,
+                "translucency": {"enabled": False, "value": 1},
+            }
+        ],
+        "supported-platforms": {"circles": ["watchOS"], "squares": "shared"},
+    }
+    (composer_dir / "icon.json").write_text(json.dumps(composer, indent=2) + "\n", encoding="utf-8")
+
     # Register the same artwork in Telegram's stock icon picker. It is the
     # primary icon (nil alternate-icon name), so it must be the first and only
     # default entry rather than a fake alternate icon.
@@ -68,6 +113,10 @@ def main() -> int:
 
     if not (target / "AyuGramAppIcon.png").is_file():
         raise RuntimeError("AyuGram app icon missing")
+    if not (composer_assets / "AyuGram.png").is_file():
+        raise RuntimeError("AyuGram Icon Composer artwork missing")
+    if '"image-name": "AyuGram.png"' not in (composer_dir / "icon.json").read_text(encoding="utf-8"):
+        raise RuntimeError("AyuGram primary Icon Composer bundle incomplete")
     if "AyuGramAppIcon.png" not in (target / "Contents.json").read_text(encoding="utf-8"):
         raise RuntimeError("AyuGram app icon catalog incomplete")
     if 'PresentationAppIcon(name: "AyuGram", imageName: "AyuGramIcon", isDefault: true)' not in app_delegate.read_text(encoding="utf-8"):

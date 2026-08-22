@@ -16,8 +16,8 @@ struct AyuFolderPreview: Equatable {
 }
 
 enum AyuChatListAppearancePreview: Equatable {
-    case header(NetworkStatusTitle.Status?)
-    case folders([AyuFolderPreview])
+    case header(title: String, status: NetworkStatusTitle.Status?)
+    case folders(items: [AyuFolderPreview], mode: Int32, showUnread: Bool)
 }
 
 final class AyuChatListAppearancePreviewItem: ListViewItem, ItemListItem {
@@ -94,7 +94,7 @@ private final class AyuChatListAppearancePreviewItemNode: ListViewItemNode {
         self.folderViews.removeAll()
     }
 
-    private func updateHeader(item: AyuChatListAppearancePreviewItem, frame: CGRect, status: NetworkStatusTitle.Status?) {
+    private func updateHeader(item: AyuChatListAppearancePreviewItem, frame: CGRect, title: String, status: NetworkStatusTitle.Status?) {
         self.clearFolders()
         let titleView: ChatListTitleView
         if let current = self.titleView {
@@ -115,7 +115,7 @@ private final class AyuChatListAppearancePreviewItemNode: ListViewItemNode {
         }
         titleView.isHidden = false
         titleView.title = NetworkStatusTitle(
-            text: "AyuGram",
+            text: title,
             activity: false,
             hasProxy: false,
             connectsViaProxy: false,
@@ -127,7 +127,7 @@ private final class AyuChatListAppearancePreviewItemNode: ListViewItemNode {
         let _ = titleView.updateLayout(availableSize: frame.size, transition: .immediate)
     }
 
-    private func updateFolders(item: AyuChatListAppearancePreviewItem, folders: [AyuFolderPreview], frame: CGRect) {
+    private func updateFolders(item: AyuChatListAppearancePreviewItem, folders: [AyuFolderPreview], mode: Int32, showUnread: Bool, frame: CGRect) {
         self.titleView?.isHidden = true
         self.clearFolders()
         let values = Array(folders.prefix(3))
@@ -145,7 +145,7 @@ private final class AyuChatListAppearancePreviewItemNode: ListViewItemNode {
             label.textColor = index == 0 ? item.theme.list.itemAccentColor : item.theme.list.itemSecondaryTextColor
             label.textAlignment = .center
             label.lineBreakMode = .byTruncatingTail
-            switch AyuRuntimeSettings.folderTitleMode {
+            switch mode {
             case 1:
                 label.text = value.title
             case 2:
@@ -157,7 +157,7 @@ private final class AyuChatListAppearancePreviewItemNode: ListViewItemNode {
                     label.text = value.title
                 }
             }
-            let badgeWidth: CGFloat = AyuRuntimeSettings.folderUnreadBadge && value.unreadCount > 0 ? 27.0 : 0.0
+            let badgeWidth: CGFloat = showUnread && value.unreadCount > 0 ? 27.0 : 0.0
             label.frame = CGRect(x: 8.0, y: 0.0, width: pill.bounds.width - 16.0 - badgeWidth, height: pill.bounds.height)
             pill.addSubview(label)
 
@@ -227,10 +227,10 @@ private final class AyuChatListAppearancePreviewItemNode: ListViewItemNode {
                 self.previewCard.frame = CGRect(x: left, y: 12.0, width: width, height: 70.0)
                 self.previewCard.backgroundColor = item.theme.list.itemHighlightedBackgroundColor
                 switch item.preview {
-                case let .header(status):
-                    self.updateHeader(item: item, frame: CGRect(x: 10.0, y: 10.0, width: width - 20.0, height: 50.0), status: status)
-                case let .folders(folders):
-                    self.updateFolders(item: item, folders: folders, frame: CGRect(x: 8.0, y: 15.0, width: width - 16.0, height: 40.0))
+                case let .header(title, status):
+                    self.updateHeader(item: item, frame: CGRect(x: 10.0, y: 10.0, width: width - 20.0, height: 50.0), title: title, status: status)
+                case let .folders(folders, mode, showUnread):
+                    self.updateFolders(item: item, folders: folders, mode: mode, showUnread: showUnread, frame: CGRect(x: 8.0, y: 15.0, width: width - 16.0, height: 40.0))
                 }
             })
         }
