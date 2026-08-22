@@ -91,6 +91,16 @@ jobs:
           grep -q 'AYU_VIEW_ONCE_DURABLE_v0_3' submodules/TelegramCore/Sources/TelegramEngine/Messages/MarkMessageContentAsConsumedInteractively.swift
           grep -q 'case telegram = 8' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift
           grep -q 'case .telegram: markerColor = dateColor' submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/ChatMessageDateAndStatusNode.swift
+          grep -q 'AYU_ESSENTIALS_v1' submodules/TelegramCore/Sources/State/AyuRuntimeSettings.swift
+          grep -q 'AYU_ESSENTIALS_v1' submodules/TelegramPresentationData/Sources/NumericFormat.swift
+          grep -q 'AYU_ESSENTIALS_v1' submodules/TelegramStringFormatting/Sources/PresenceStrings.swift
+          grep -q 'withSeconds: AyuRuntimeSettings.snapshot.timeWithSeconds' submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/StringForMessageTimestampStatus.swift
+          grep -q 'displayTitleUnfiltered' submodules/LocalizedPeerData/Sources/PeerTitle.swift
+          grep -q 'ayuStripZalgoWithEntities' submodules/TelegramUI/Components/Chat/ChatMessageTextBubbleContentNode/Sources/ChatMessageTextBubbleContentNode.swift
+          grep -q "hidePhoneNumber" submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoHeaderNode.swift
+          grep -q 'AYU_PEER_ID_INFO_v1' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoProfileItems.swift
+          grep -Fq 'title: "Основные", label: ""' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
+          grep -q 'ayuEssentialsSettingsController(context: context)' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
           echo '=== FULL AYU + STOCK TELEGRAM THEMES VERIFY SUCCESS ==='
 
   build_ipa:

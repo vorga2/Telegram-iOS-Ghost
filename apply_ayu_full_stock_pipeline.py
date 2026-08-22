@@ -39,6 +39,7 @@ PATCHERS = (
     "apply_ayu_branding_only.py",
     "apply_ayu_app_icon.py",
     "apply_ayu_theme_integrity.py",
+    "apply_ayu_extera_essentials.py",
 )
 
 
