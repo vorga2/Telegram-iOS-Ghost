@@ -14,8 +14,8 @@
 | PR | `#18` |
 | PR title | `CI: build Ayu ThemeRepair V1 IPA` |
 | Head branch | `ayu-theme-repair-v1` |
-| Последний feature head до docs | `69269b59888baa01395022c0dad8e1f3b6ee940c` |
-| Последний подтверждённый run | `#190`, id `32600162563`, `SUCCESS` |
+| Последний feature head до docs | `6e6b69d` (Essentials + v6 night-slot repair) |
+| Последний подтверждённый run | id `32643889106`, `SUCCESS` (verify + build_ipa) |
 | Pinned Telegram-iOS | `6ad963e5b62d354da79040f388ae2b9132fb17b8` |
 | IPA artifact | `AyuGram-Full-StockThemes-IPA` |
 
@@ -37,7 +37,13 @@
 8. avatar rounding (list/chat/profile);
 9. chat-list appearance и folders;
 10. Spy edit/read/details/content dates;
-11. branding, app icon и theme integrity.
+11. branding, app icon и theme integrity;
+12. exteraGram Essentials (числа/секунды/Zaglo/профиль-ID), peer-id scope fix.
+
+ThemeRepair v6: ночной слот чинится один раз по фактическому рендеру
+(`makePresentationTheme(...).overallDarkAppearance`), а не по заявленной базе —
+день-базированные тёмные кастомы (типа «геймерской») теперь занимают night slot.
+Ключ recovery: `themeStockRoutingRecovery.v6`.
 
 ## Карта функций и defaults
 
