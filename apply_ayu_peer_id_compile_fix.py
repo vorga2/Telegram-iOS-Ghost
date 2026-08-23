@@ -73,11 +73,19 @@ def main() -> int:
             ayuDcLine = city.isEmpty ? "DC\\(dc)" : "DC\\(dc), \\(city)"
         }
 
-        var ayuFooterText = "ID: \\(ayuIdText)"
-        if !ayuDcLine.isEmpty {
-            ayuFooterText += "\\n\\(ayuDcLine)"
-        }
-        items[.peerInfoTrailing]!.append(PeerInfoScreenCommentItem(id: 0xA0091101, text: ayuFooterText))
+        // Rendered exactly like the phone/username rows; tapping copies the value.
+        let ayuCopyText = ayuDcLine.isEmpty ? ayuIdText : "\\(ayuIdText)\\n\\(ayuDcLine)"
+        items[.peerInfoTrailing]!.append(PeerInfoScreenLabeledValueItem(
+            id: 0xA0091101,
+            label: "ID",
+            rightLabel: ayuDcLine.isEmpty ? nil : ayuDcLine,
+            text: ayuIdText,
+            textColor: .accent,
+            action: { _, _ in
+                UIPasteboard.general.string = ayuCopyText
+            },
+            requestLayout: { _ in }
+        ))
     }
 
 """

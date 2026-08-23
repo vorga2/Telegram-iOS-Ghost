@@ -76,8 +76,9 @@ jobs:
           grep -Fq 'height: min(54.0, availableTitleHeight)' submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListNavigationBar.swift
           grep -Fq 'let color = isDark ? UIColor.white : UIColor.black' submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListNavigationBar.swift
           grep -Fq 'let entries: [AyuMainEntry] = [.header, .ghost, .customization, .spy]' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
-          grep -q 'AYU_THEME_STOCK_ROUTING_RECOVERY_v5' submodules/TelegramUI/Sources/SharedAccountContext.swift
-          grep -q 'automaticThemeSwitchSetting.theme = ayuReferenceIsDarkBased(current.theme) ? current.theme : .builtin(.night)' submodules/TelegramUI/Sources/SharedAccountContext.swift
+          grep -q 'AYU_THEME_STOCK_ROUTING_RECOVERY_v6' submodules/TelegramUI/Sources/SharedAccountContext.swift
+          grep -q 'automaticThemeSwitchSetting.theme = ayuReferenceRendersDark(current.theme) ? current.theme : .builtin(.night)' submodules/TelegramUI/Sources/SharedAccountContext.swift
+          grep -q 'builtTheme.overallDarkAppearance' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'case .explicitNone = automaticThemeSwitchSetting.trigger' submodules/TelegramUI/Sources/SharedAccountContext.swift
           grep -q 'AYU_LEGACY_THEME_ACCENT_ALPHA_v4' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
           test "$(grep -c 'ayuThemeAccentColor(settings.accentColor)' submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift)" = 4
@@ -99,6 +100,8 @@ jobs:
           grep -q 'ayuStripZalgoWithEntities' submodules/TelegramUI/Components/Chat/ChatMessageTextBubbleContentNode/Sources/ChatMessageTextBubbleContentNode.swift
           grep -q "hidePhoneNumber" submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoHeaderNode.swift
           grep -q 'AYU_PEER_ID_INFO_v1' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoProfileItems.swift
+          grep -q 'UIPasteboard.general.string = ayuCopyText' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoProfileItems.swift
+          grep -A6 'id: 0xA0091101,' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoProfileItems.swift | grep -q 'label: "ID",'
           grep -Fq 'title: "Основные", label: ""' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
           grep -q 'ayuEssentialsSettingsController(context: context)' submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/AyuSettingsController.swift
           echo '=== FULL AYU + STOCK TELEGRAM THEMES VERIFY SUCCESS ==='

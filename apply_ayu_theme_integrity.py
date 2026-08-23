@@ -1,11 +1,11 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
 
-STATE_MARK = "AYU_THEME_STOCK_ROUTING_RECOVERY_v5"
+STATE_MARK = "AYU_THEME_STOCK_ROUTING_RECOVERY_v6"
 ALPHA_MARK = "AYU_LEGACY_THEME_ACCENT_ALPHA_v4"
 
 
@@ -28,19 +28,21 @@ def patch_state(root: Path) -> None:
     replacement = f"""        self.accountManager = accountManager
 
         // {STATE_MARK}
-        // ThemeRepair v3 routed a dark palette through Telegram's manual
-        // light-theme slot, so the stored night reference can resolve to a
-        // day/classic base. That makes the Appearance night-mode switch show a
-        // light palette and renders dark custom themes washed out. Repair the
-        // night slot ONCE only when it provably points to a light base,
-        // preferring the user's own dark theme as the new night reference.
-        // The stock `force` flag (the Appearance switch itself), accents,
-        // bubbles and wallpapers stay exactly as the user left them.
+        // Legacy Ayu builds wrote a day-based palette into Telegram's manual
+        // night slot, so dark custom themes — including ones that render dark
+        // but are declared on a day base — could never occupy the night slot:
+        // the switch showed stock Night and custom themes looked mixed. Repair
+        // the slot ONCE by actually rendering the candidate references and
+        // preferring the user's own theme when it renders dark. The stock
+        // `force` flag, accents, bubbles and wallpapers stay untouched.
         if applicationBindings.isMainApp {{
-            let recoveryKey = "com.nomadvorga.telegram.ayu.themeStockRoutingRecovery.v5"
+            let recoveryKey = "com.nomadvorga.telegram.ayu.themeStockRoutingRecovery.v6"
             if !UserDefaults.standard.bool(forKey: recoveryKey) {{
                 let _ = updatePresentationThemeSettingsInteractively(accountManager: accountManager, {{ current in
-                    func ayuReferenceIsDarkBased(_ reference: PresentationThemeReference) -> Bool {{
+                    func ayuReferenceRendersDark(_ reference: PresentationThemeReference) -> Bool {{
+                        if let builtTheme = makePresentationTheme(mediaBox: accountManager.mediaBox, themeReference: reference) {{
+                            return builtTheme.overallDarkAppearance
+                        }}
                         switch reference {{
                         case .builtin(let builtin):
                             switch builtin.baseTheme {{
@@ -57,8 +59,8 @@ def patch_state(root: Path) -> None:
                     }}
 
                     var automaticThemeSwitchSetting = current.automaticThemeSwitchSetting
-                    if !ayuReferenceIsDarkBased(automaticThemeSwitchSetting.theme) {{
-                        automaticThemeSwitchSetting.theme = ayuReferenceIsDarkBased(current.theme) ? current.theme : .builtin(.night)
+                    if !ayuReferenceRendersDark(automaticThemeSwitchSetting.theme) {{
+                        automaticThemeSwitchSetting.theme = ayuReferenceRendersDark(current.theme) ? current.theme : .builtin(.night)
                     }}
 
                     // ThemeRepair v3 wrote explicitNone, which disables auto-night entirely.
@@ -138,8 +140,8 @@ def main() -> int:
     for required, value in (
         (STATE_MARK, shared),
         (ALPHA_MARK, make),
-        ("ayuReferenceIsDarkBased", shared),
-        ("automaticThemeSwitchSetting.theme = ayuReferenceIsDarkBased(current.theme) ? current.theme : .builtin(.night)", shared),
+        ("ayuReferenceRendersDark", shared),
+        ("automaticThemeSwitchSetting.theme = ayuReferenceRendersDark(current.theme) ? current.theme : .builtin(.night)", shared),
         ("case .explicitNone = automaticThemeSwitchSetting.trigger", shared),
         ("themeSpecificAccentColors: current.themeSpecificAccentColors", shared),
         ("themeSpecificChatWallpapers: current.themeSpecificChatWallpapers", shared),
