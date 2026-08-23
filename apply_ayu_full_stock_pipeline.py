@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 from __future__ import annotations
 
 import subprocess
@@ -38,7 +38,6 @@ PATCHERS = (
     "apply_ayu_spy_content_read_dates.py",
     "apply_ayu_branding_only.py",
     "apply_ayu_app_icon.py",
-    "apply_ayu_theme_integrity.py",
     "apply_ayu_extera_essentials.py",
     "apply_ayu_peer_id_compile_fix.py",
 )
@@ -55,8 +54,8 @@ def main() -> int:
         subprocess.run([sys.executable, str(here / name), str(root)], check=True)
 
     # Theme selection, family routing and native glass stay byte-for-byte
-    # upstream. MakePresentationTheme differs only by the legacy alpha-zero
-    # compatibility helper; it does not select a theme or wallpaper variant.
+    # upstream. Ayu must not touch theme routing at all: day/night switching,
+    # custom themes and wallpapers behave exactly like stock Telegram.
     stock_paths = (
         "submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift",
         "submodules/Display/Source/NativeWindowHostView.swift",
@@ -66,6 +65,8 @@ def main() -> int:
         "submodules/TelegramUI/Sources/ChatPinnedMessageTitlePanelNode.swift",
         "submodules/TelegramUI/Components/PeerInfo/PeerInfoVisualMediaPaneNode/Sources/PeerInfoGiftsPaneNode.swift",
         "submodules/TelegramPresentationData/Sources/PresentationData.swift",
+        "submodules/TelegramUI/Sources/SharedAccountContext.swift",
+        "submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift",
     )
     for relative in stock_paths:
         subprocess.run(["git", "diff", "--exit-code", "HEAD", "--", relative], cwd=root, check=True)
