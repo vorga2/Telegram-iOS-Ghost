@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 MARK = "AYU_PEER_ID_INFO_v1"
-FIX_MARK = "AYU_PEER_ID_INFO_SCOPE_FIX_v2"
+FIX_MARK = "AYU_PEER_ID_INFO_SCOPE_FIX_v3"
 
 
 def main() -> int:
@@ -26,15 +26,10 @@ def main() -> int:
     if marker_count != 1:
         raise RuntimeError(f"peer id block: expected exactly 1 old marker, found {marker_count}")
 
-    # The original essentials patch anchored on the end of editingItems(), not
-    # infoItems(). In that scope data.peer is EnginePeer? and the InfoSection
-    # variable currentPeerInfoSection does not exist. Remove that misplaced block.
     old_start = text.index(marker)
     old_end = text.index("    var result: [(AnyHashable, [PeerInfoScreenItem])] = []\n", old_start)
     text = text[:old_start] + text[old_end:]
 
-    # This anchor is unique to infoItems(): its result is enumerated using
-    # InfoSection. editingItems() uses a different Section enum.
     anchor = """    var result: [(AnyHashable, [PeerInfoScreenItem])] = []
     for section in InfoSection.allCases {
 """
@@ -42,10 +37,10 @@ def main() -> int:
         raise RuntimeError(f"infoItems result anchor: expected 1, found {text.count(anchor)}")
 
     block = """    // AYU_PEER_ID_INFO_v1: technical info block at the bottom of the profile.
-    // AYU_PEER_ID_INFO_SCOPE_FIX_v2: this must live inside infoItems(), where
-    // data is unwrapped and items is keyed by InfoSection.
-    if AyuRuntimeSettings.snapshot.peerIdStyle != 0 {
-        let ayuPeerId = data.peer.id
+    // AYU_PEER_ID_INFO_SCOPE_FIX_v3: PeerInfoScreenData.peer is optional even
+    // inside infoItems(), so unwrap it before reading id/photo information.
+    if AyuRuntimeSettings.snapshot.peerIdStyle != 0, let ayuPeer = data.peer {
+        let ayuPeerId = ayuPeer.id
         let ayuInternalId = ayuPeerId.id._internalGetInt64Value()
         let ayuIdText: String
         if AyuRuntimeSettings.snapshot.peerIdStyle == 2 {
@@ -62,7 +57,7 @@ def main() -> int:
         }
 
         var ayuDcLine = ""
-        if let ayuResource = data.peer.profileImageRepresentations.first?.resource as? CloudPeerPhotoSizeMediaResource {
+        if let ayuResource = ayuPeer.profileImageRepresentations.first?.resource as? CloudPeerPhotoSizeMediaResource {
             let dc = ayuResource.datacenterId
             let city: String
             switch dc {
@@ -89,7 +84,7 @@ def main() -> int:
 
     text = text.replace(anchor, block + anchor, 1)
     path.write_text(text, encoding="utf-8")
-    print(f"[ayu-peer-id-fix] moved peer ID/DC block into infoItems(): {path}")
+    print(f"[ayu-peer-id-fix] installed optional-safe peer ID/DC block: {path}")
     return 0
 
 
