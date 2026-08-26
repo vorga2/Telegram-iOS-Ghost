@@ -1,8 +1,18 @@
-# Performance rules
+# Performance and stock-behavior contract
 
-1. Feature OFF = one cheap in-memory Atomic check and stock Telegram path.
-2. No per-frame allocations from Ayu features.
-3. No new periodic timers or network polling.
-4. Future Spy storage: separate auxiliary DB/queue, batched writes, bounded attachment cache.
-5. Deleted-mark rendering: only visible message items, O(1) cached metadata lookup; no whole-chat scan per frame.
-6. New features are added only after the previous layer survives normal chats, folders, profiles, contacts and message sending without crashes.
+Эти правила обязательны для всех новых функций AyuGram.
+
+1. Feature OFF означает один дешёвый read из `Atomic` и немедленный переход в штатный Telegram path.
+2. `UserDefaults` используется для сохранения, но не читается на каждом сообщении, layout или кадре.
+3. Запрещены пользовательские polling loops, периодические network requests и `CADisplayLink`.
+4. Запрещены покадровые аллокации, сканирование всего чата при layout и изменение глобальной identity/cache семантики Telegram.
+5. Рендер метки удалённого сообщения выполняется только для видимых message nodes; lookup состояния — O(1).
+6. Архив удалённых ограничен: не более `20 000` marker records; тяжёлые данные живут вне Postbox в отдельном SQLite/files storage.
+7. Скругление аватаров меняет только clipping/corner radius нужного видимого узла и обновляется event-driven.
+8. Снег реализован одним `CAEmitterLayer`: маленький bounded emitter, без CPU timer и без зависимости от горизонтального scroll историй.
+9. Theme, wallpaper, bubble palette и Liquid Glass не переопределяются AyuGram. Pipeline обязан подтвердить stock-файлы byte-for-byte.
+10. Любая оптимизация проверяется не только в обычном чате, но и в папках, профилях, форумах, media/view-once, deleted viewer и при смене светлой/тёмной кастомной темы.
+
+## Практический вывод
+
+Количество переключателей само по себе FPS не снижает: сохранённые значения занимают малый объём, а UI настроек не находится в горячем пути чатов. Риск появляется только если функция добавляет работу на каждый кадр/каждое сообщение. Текущая архитектура специально не делает этого; абсолютное равенство FPS официальному клиенту подтверждается только профилированием на одинаковом устройстве и сценарии.

@@ -29,19 +29,19 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 
 def patch_profile_items(text: str) -> str:
     anchor = """        let ItemCommunity = 10000\n        \n"""
-    injected = """        let ItemCommunity = 10000\n\n        // AYU_IOS_PROFILE_CACHE_v0_3: remember only values Telegram has already shown locally.\n        let ayuCurrentNote = (data.cachedData as? CachedUserData)?.note?.text\n        AyuProfileFieldCache.remember(peerId: user.id, phone: user.phone, username: user.addressName, note: ayuCurrentNote)\n        let ayuCachedProfile = AyuProfileFieldCache.value(peerId: user.id)\n        \n"""
+    injected = """        let ItemCommunity = 10000\n\n        // AYU_IOS_PROFILE_CACHE_v0_3: remember only values Telegram has already shown locally.\n        // Telegram can keep these fields as non-nil empty strings after privacy/block updates,\n        // so normalize empty values to nil before caching and before choosing the display value.\n        let ayuServerPhone = user.phone.flatMap { value -> String? in\n            return value.isEmpty ? nil : value\n        }\n        let ayuServerUsername = user.addressName.flatMap { value -> String? in\n            return value.isEmpty ? nil : value\n        }\n        let ayuCurrentNote = (data.cachedData as? CachedUserData)?.note?.text\n        AyuProfileFieldCache.remember(peerId: user.id, phone: ayuServerPhone, username: ayuServerUsername, note: ayuCurrentNote)\n        let ayuCachedProfile = AyuProfileFieldCache.value(peerId: user.id)\n        let ayuDisplayPhone = ayuServerPhone ?? ayuCachedProfile.phone\n        let ayuDisplayUsername = ayuServerUsername ?? ayuCachedProfile.username\n        \n"""
     text = replace_once(text, anchor, injected, "profile-cache-init")
 
     text = replace_once(
         text,
         "        if let phone = user.phone {\n",
-        "        if let phone = user.phone ?? ayuCachedProfile.phone {\n",
+        "        if let phone = ayuDisplayPhone {\n",
         "profile-cache-phone",
     )
     text = replace_once(
         text,
         "        if let mainUsername = user.addressName {\n",
-        "        if let mainUsername = user.addressName ?? ayuCachedProfile.username {\n",
+        "        if let mainUsername = ayuDisplayUsername {\n",
         "profile-cache-username",
     )
 

@@ -1,68 +1,63 @@
-# AyuGram iOS v0.2.5 — stability base
+# AyuGram iOS
 
-Это **не старый v0.1**. v0.1 напрямую подтверждал локальный read-state, обходя штатную state machine Telegram; это удалено.
+AyuGram — воспроизводимые патчи поверх официального Telegram-iOS: Ghost, удалённые сообщения, View Once, Spy и exteraGram без замены штатных тем, обоев и Liquid Glass.
 
-## Что реально работает в v0.2.5
+> Следующему чату Work: начни с [MASTER_HANDOFF.md](MASTER_HANDOFF.md), затем проверь актуальные PR/head SHA/CI metadata на GitHub.
 
-- Ghost master switch
-- Не отправлять read receipts сообщений
-- Не отправлять story views
-- Не отправлять online
-- Не отправлять typing/record/upload activity (кроме group-call/emoji interactions)
-- Автоматический offline
-- Управление из `Telegram -> Debug -> AyuGram Settings`
+## Текущее состояние
 
-Ghost **OFF по умолчанию**. Пока он выключен, код ведёт себя максимально близко к официальному Telegram.
+| Параметр | Значение |
+|---|---|
+| Репозиторий | `vorga2/Telegram-iOS-Ghost` |
+| Ветка / PR | `ayu-theme-repair-v1` / `#18` |
+| Telegram-iOS | `6ad963e5b62d354da79040f388ae2b9132fb17b8` |
+| Последний подтверждённый feature SHA | `69269b59888baa01395022c0dad8e1f3b6ee940c` |
+| Последний подтверждённый CI | run `#190`, `SUCCESS` |
 
-## Что будет в следующем слое
+## Что реализовано
 
-- Spy: сохранение удалённых сообщений
-- история правок
-- optional bot chats / read dates / last online / attachments
-- полупрозрачные удалёнки
-- настраиваемая метка/цвет удалённых сообщений
+### AyuGram
 
-Эти пункты специально не имитируются фейковыми переключателями: для них нужен отдельный storage/rendering слой, иначе можно снова сломать Postbox.
+- Раскрываемый Ghost master switch: блокировка read receipts, story views, online и typing/activity; auto-offline, ручное одноразовое «Прочитать», отложка и короткий `0,2 s` send pulse. Master default OFF.
+- Архив удалённых: отдельный viewer, realtime refresh, SQLite/files storage, peer-qualified IDs и лимит `20 000` markers.
+- Удалённое сообщение в обычном чате целиком имеет alpha `0,5`: bubble, текст, reply, аватар, sticker, emoji и media; viewer остаётся непрозрачным.
+- Метка удалёнки: корзина / нет / крестик / глаз. Цвет: Telegram default, gray, red, orange, pink, magenta, purple, indigo или blue.
+- Безопасная навигация viewer: никакого cloud jump к удалённому ID и очистки после «Сообщение не найдено».
+- View Once сохраняется автоматически; «Сжечь» создаёт durable burned-state.
+- Spy сохраняет удалённые, историю правок и read dates; детали доступны из context menu.
 
-## Производительность
+### exteraGram → Чаты
 
-- `UserDefaults` не читается в каждом сообщении/кадре: настройки загружаются один раз в `Atomic` snapshot.
-- Никаких новых polling loops.
-- Ghost online отключает создание штатного 30-секундного online refresh timer при включённом hide-online.
-- Typing suppression происходит до Postbox transaction/network request.
-- Read suppression оставляет штатную Telegram verification/confirmation state machine и блокирует только низкоуровневый API push.
-- Story suppression завершает существующую operation-log operation штатным путём.
+- «Запоминать последнюю камеру» сохраняет фактическую front/back capture camera кружка, не только preview. Default OFF.
 
-## Быстрый CI
+### exteraGram → Оформление
 
-`verify-patch.yml` сначала за несколько минут проверяет anchors. Если patch сломан — дорогая сборка не запускается.
+- Три независимых скругления `0...100`: список чатов, message avatars и профили users/groups/channels. Default `100` — stock circle.
+- «Единое закругление» default OFF: форумы сохраняют официальную форму; ON применяет выбранное скругление.
+- Preview и видимые nodes обновляются сразу.
+- Список чатов: вертикальный маленький снег только в header до Search, скрытие premium status только в header, скрытие stories только в collapsed header, заголовок AyuGram / username / имя / «Чаты».
+- Light theme использует чёрный снег, dark — белый; fade сверху и снизу, реализация `CAEmitterLayer` без CPU timer.
+- Реальные папки аккаунта: названия+иконки / только названия / только иконки; unread pills можно скрыть.
 
-`build-ipa.yml` сохраняет Bazel disk cache в GitHub Actions cache. Первый build на новом cache всё ещё может быть долгим. **Следующие сборки на том же pinned Telegram commit должны переиспользовать большую часть уже собранного графа.** Точное время зависит от cache hit/размера cache и runner.
+### Branding
 
-Telegram commit фиксируется в `telegram-ref.txt`, чтобы очередной апдейт upstream не ломал patch и не сбрасывал cache без причины.
+- Display name `AyuGram`.
+- Фиолетовая иконка — primary и первая в stock Telegram icon picker.
+- Composer background `#2B2242`, без glass/specular/shadow и белой каймы.
 
+## Stock themes и FPS
 
-## v0.2.5.2
-- Fixed Swift 6 `Atomic.modify` unused-result build error.
-- Workflows can resolve Telegram-iOS HEAD when `telegram-ref.txt` is absent.
+Theme family, wallpaper, bubble palette, контраст и Liquid Glass остаются штатными Telegram. Pipeline byte-for-byte проверяет критические theme-файлы. Настройки находятся в `Atomic` snapshot; нет polling loops, display links, покадровых аллокаций и full-chat scans. Снег работает через bounded Core Animation emitter. Полный контракт: [PERFORMANCE.md](PERFORMANCE.md).
 
+## Сборка
 
-## v0.2.5
-- Swift 6 fix for ignored Atomic.modify result is included.
-- Build cache key now follows the actual Telegram-iOS commit even when telegram-ref.txt is absent.
-- ZIP includes payload/ and both GitHub Actions workflows.
+```bash
+git clone https://github.com/TelegramMessenger/Telegram-iOS.git Telegram-iOS
+cd Telegram-iOS
+git checkout 6ad963e5b62d354da79040f388ae2b9132fb17b8
+git submodule update --init --recursive
+cd ..
+python3 apply_ayu_full_stock_pipeline.py Telegram-iOS
+```
 
-## v0.2.5
-- Исправлен DebugController: v0.2.2 подменял `case .accounts` в `var section`, а не в `item(...)`.
-- Добавлены guards, чтобы патчер падал до долгой сборки, если `section`/`stableId` когда-либо будут затронуты.
-
-## v0.2.5
-- DebugController patch теперь поддерживает `.accounts` с associated value (`case let .accounts(theme)`, `.accounts(_)` и т.п.).
-- Патч больше не зависит от того, что следующим case будет `.logToFile`.
-- Verify переведён на `ubuntu-latest`: он не компилирует iOS и не требует macOS.
-- Verify проверяет, что `section` и `stableId` не повреждены, а AyuGram row находится только внутри `item(...)`.
-
-## v0.2.5
-- Исправлена ложная ошибка Verify `accounts section mapping corrupted`.
-- Причина: YAML heredoc менял отступы внутри многострочного Python string.
-- Проверка теперь использует явные `\n`, поэтому сравнивает реальные Swift-отступы точно.
+GitHub Actions выполняет быстрый Ubuntu verify, затем release arm64 build на macOS 26 / Xcode 26.2. Артефакт: `AyuGram-Full-StockThemes-IPA`.
