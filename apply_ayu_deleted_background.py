@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 
-MARK = "AYU_DELETED_DARK_BUBBLE_v1"
+MARK = "AYU_DELETED_DARK_BUBBLE_v2"
 
 
 def one(text: str, old: str, new: str, label: str) -> str:
@@ -61,24 +61,31 @@ def main() -> int:
             "        strongSelf.backgroundWallpaperNode.setType(type: backgroundType, theme: item.presentationData.theme, essentialGraphics: graphics, maskMode: strongSelf.backgroundMaskMode, backgroundNode: presentationContext.backgroundNode)\n"
             "        strongSelf.shadowNode.setType(type: backgroundType, hasWallpaper: hasWallpaper, graphics: graphics)\n"
         )
-        replacement = anchor + f'''        // {MARK}: only dark-theme deleted bubbles receive the chosen custom
-        // background. Incoming and outgoing use the same selected color. The
-        // final message node already has alpha 0.5, so this layer stays opaque
-        // and the effective bubble opacity is exactly 0.5 (not 0.25).
+        replacement = anchor + f'''        // {MARK}: custom choices remain dark-theme-only. "Telegram"
+        // takes the real incoming/outgoing bubble fill from PresentationTheme.
+        // Use fill[0], not the wallpaper backdrop or animated gradient, then
+        // let the final message-node alpha provide the requested opacity 0.5.
         let ayuDeletedBubbleColor: UIColor?
-        if item.presentationData.theme.theme.overallDarkAppearance,
-           AyuRuntimeSettings.isDeleted(item.message.id),
+        if AyuRuntimeSettings.isDeleted(item.message.id),
            !AyuRuntimeSettings.isInDeletedViewer(item.message.id) {{
             switch AyuDeletedMarkerColor(rawValue: AyuRuntimeSettings.snapshot.deletedMarkerColor) ?? .telegram {{
-            case .red: ayuDeletedBubbleColor = UIColor.systemRed
-            case .orange: ayuDeletedBubbleColor = UIColor.systemOrange
-            case .gray: ayuDeletedBubbleColor = UIColor.systemGray
-            case .purple: ayuDeletedBubbleColor = UIColor.systemPurple
-            case .pink: ayuDeletedBubbleColor = UIColor.systemPink
-            case .magenta: ayuDeletedBubbleColor = UIColor(red: 0.86, green: 0.12, blue: 0.46, alpha: 1.0)
-            case .indigo: ayuDeletedBubbleColor = UIColor.systemIndigo
-            case .blue: ayuDeletedBubbleColor = UIColor.systemBlue
-            case .telegram: ayuDeletedBubbleColor = nil
+            case .red: ayuDeletedBubbleColor = item.presentationData.theme.theme.overallDarkAppearance ? UIColor.systemRed : nil
+            case .orange: ayuDeletedBubbleColor = item.presentationData.theme.theme.overallDarkAppearance ? UIColor.systemOrange : nil
+            case .gray: ayuDeletedBubbleColor = item.presentationData.theme.theme.overallDarkAppearance ? UIColor.systemGray : nil
+            case .purple: ayuDeletedBubbleColor = item.presentationData.theme.theme.overallDarkAppearance ? UIColor.systemPurple : nil
+            case .pink: ayuDeletedBubbleColor = item.presentationData.theme.theme.overallDarkAppearance ? UIColor.systemPink : nil
+            case .magenta: ayuDeletedBubbleColor = item.presentationData.theme.theme.overallDarkAppearance ? UIColor(red: 0.86, green: 0.12, blue: 0.46, alpha: 1.0) : nil
+            case .indigo: ayuDeletedBubbleColor = item.presentationData.theme.theme.overallDarkAppearance ? UIColor.systemIndigo : nil
+            case .blue: ayuDeletedBubbleColor = item.presentationData.theme.theme.overallDarkAppearance ? UIColor.systemBlue : nil
+            case .telegram:
+                switch backgroundType {{
+                case .incoming:
+                    ayuDeletedBubbleColor = bubbleColorComponents(theme: item.presentationData.theme.theme, incoming: true, wallpaper: hasWallpaper).fill.first?.withAlphaComponent(1.0)
+                case .outgoing:
+                    ayuDeletedBubbleColor = bubbleColorComponents(theme: item.presentationData.theme.theme, incoming: false, wallpaper: hasWallpaper).fill.first?.withAlphaComponent(1.0)
+                case .none:
+                    ayuDeletedBubbleColor = nil
+                }}
             }}
         }} else {{
             ayuDeletedBubbleColor = nil
@@ -102,14 +109,14 @@ def main() -> int:
         MARK,
         "private let ayuDeletedBackgroundNode: ASImageNode",
         "bubbleMaskForType(backgroundType, graphics: graphics)",
-        "theme.overallDarkAppearance",
-        "case .telegram: ayuDeletedBubbleColor = nil",
+        "bubbleColorComponents(theme: item.presentationData.theme.theme, incoming: true, wallpaper: hasWallpaper).fill.first?.withAlphaComponent(1.0)",
+        "bubbleColorComponents(theme: item.presentationData.theme.theme, incoming: false, wallpaper: hasWallpaper).fill.first?.withAlphaComponent(1.0)",
     )
     for value in required:
         if value not in verify:
             raise RuntimeError(f"deleted dark bubble incomplete: {value}")
 
-    print("[ayu-deleted-background] dark deleted bubbles use the selected color at effective alpha 0.5")
+    print("[ayu-deleted-background] Telegram mode uses the native side-specific bubble fill; custom dark colors stay at effective alpha 0.5")
     return 0
 
 
