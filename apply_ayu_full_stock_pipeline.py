@@ -38,6 +38,7 @@ PATCHERS = (
     "apply_ayu_spy_content_read_dates.py",
     "apply_ayu_branding_only.py",
     "apply_ayu_app_icon.py",
+    "apply_ayu_ios27_color_compat.py",
     "apply_ayu_extera_essentials.py",
     "apply_ayu_peer_id_compile_fix.py",
 )
@@ -58,7 +59,6 @@ def main() -> int:
     # custom themes and wallpapers behave exactly like stock Telegram.
     stock_paths = (
         "submodules/SettingsUI/Sources/Themes/ThemeSettingsController.swift",
-        "submodules/Display/Source/NativeWindowHostView.swift",
         "submodules/TelegramUI/Components/LiquidLens/Sources/LiquidLensView.swift",
         "submodules/TelegramUI/Components/GlassBackgroundComponent/Sources/GlassBackgroundComponent.swift",
         "submodules/TelegramUI/Components/Chat/ChatMessageReplyInfoNode/Sources/ChatMessageReplyInfoNode.swift",
@@ -66,7 +66,6 @@ def main() -> int:
         "submodules/TelegramUI/Components/PeerInfo/PeerInfoVisualMediaPaneNode/Sources/PeerInfoGiftsPaneNode.swift",
         "submodules/TelegramPresentationData/Sources/PresentationData.swift",
         "submodules/TelegramUI/Sources/SharedAccountContext.swift",
-        "submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift",
     )
     for relative in stock_paths:
         subprocess.run(["git", "diff", "--exit-code", "HEAD", "--", relative], cwd=root, check=True)
